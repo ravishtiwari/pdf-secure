@@ -1,0 +1,17 @@
+.env.local/
+.ruff_cache/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.pytest_cache/
+.coverage
+.venv/
+python/.venv/
+dist/
+build/
+.DS_Store
+.idea/
+.vscode/
+do-not-commit/**

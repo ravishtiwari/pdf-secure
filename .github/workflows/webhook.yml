@@ -1,0 +1,10 @@
+name: Webhook Relay (disabled)
+
+on: []
+
+jobs:
+  noop:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Workflow disabled
+        run: echo "Webhook workflow is currently disabled."
