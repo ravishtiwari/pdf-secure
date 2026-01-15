@@ -9,10 +9,13 @@ help:
 	@echo "  test  - run tests"
 
 fmt:
-	@echo "No formatter configured yet."
+	@cd engine && gofmt -l -w .
+	@cd python && ruff check --fix . || true
 
 lint:
-	@echo "No linter configured yet."
+	@cd engine && go vet ./...
+	@cd python && ruff check .
 
 test:
-	@echo "No tests configured yet."
+	@cd engine && go test ./...
+	@cd python && python3 -m pytest tests/ -v
