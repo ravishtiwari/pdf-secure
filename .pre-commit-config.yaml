@@ -7,3 +7,33 @@ repos:
       - id: check-yaml
       - id: check-merge-conflict
       - id: check-added-large-files
+  - repo: local
+    hooks:
+      - id: go-fmt
+        name: go-fmt
+        entry: bash -c "cd engine && go fmt ./..."
+        language: system
+        files: '\.go$'
+      - id: go-vet
+        name: go-vet
+        entry: bash -c "cd engine && go vet ./..."
+        language: system
+        files: '\.go$'
+      - id: go-unit-tests
+        name: go-unit-tests
+        entry: bash -c "cd engine && go test ./..."
+        language: system
+        files: '\.go$'
+  - repo: https://github.com/psf/black
+    rev: 24.1.1
+    hooks:
+      - id: black
+        files: \.py$
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: python3 -m pytest python/tests/ -v
+        language: system
+        files: \.py$
+        pass_filenames: false

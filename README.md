@@ -38,7 +38,6 @@ PDF + Policy → [ Go Engine ] → Secured PDF + Structured Receipt
 - `engine/`: The stateless Go transformation engine.
 - `python/`: The Python SDK and orchestration layer.
 - `docs/`: Architecture specifications and engine contracts.
-- `do-no-commit/`: Internal planning documents and draft specifications (ignored by git).
 
 ## 🚀 Roadmap
 
