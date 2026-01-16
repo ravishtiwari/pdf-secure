@@ -19,3 +19,5 @@ build/
 *.out
 bin/
 do-not-commit/**
+engine/bin/**
+engine/securepdf-engine
