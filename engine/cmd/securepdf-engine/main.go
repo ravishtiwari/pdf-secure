@@ -7,6 +7,10 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
+
+	"securepdf-engine/pkg/policy"
+	"securepdf-engine/pkg/receipt"
 )
 
 type engineOptValues []string
@@ -73,7 +77,29 @@ func runSecure(args []string) error {
 		return fmt.Errorf("missing required flags: %s", strings.Join(missing, ", "))
 	}
 
-	return fmt.Errorf("secure command not implemented")
+	// 1. Load Policy
+	p, err := policy.Load(*policyPath)
+	if err != nil {
+		return fmt.Errorf("policy error: %w", err)
+	}
+
+	// 2. Prepare Stub Receipt
+	res := &receipt.Receipt{
+		ID:            "stub-id-123",
+		Timestamp:     time.Now(),
+		EngineVersion: "0.0.1",
+		PolicyVersion: "v1",
+		Status:        "error",
+		Errors:        []string{"transformation pipeline not yet implemented"},
+	}
+
+	// 3. Write Receipt
+	if err := receipt.Save(*receiptPath, res); err != nil {
+		return fmt.Errorf("failed to save receipt: %w", err)
+	}
+
+	fmt.Printf("Securing PDF using policy for: %s (Password: ***)\n", p.VisibleLabel)
+	return fmt.Errorf("transformation not implemented")
 }
 
 func missingFlags(inputPath, outputPath, policyPath, receiptPath string) []string {
@@ -108,8 +134,8 @@ func printUsage(output io.Writer) {
 
 func printSecureUsage(output io.Writer) {
 	fmt.Fprintln(output, "Usage:")
-	fmt.Fprintln(output, "  securepdf-engine secure --in <input.pdf> --out <secured.pdf> ")
-	fmt.Fprintln(output, "    --policy <policy.json> --receipt <receipt.json> [--engine-opt k=v]")
+	fmt.Fprintln(output, "  securepdf-engine secure --in <input.pdf> --out <secured.pdf>")
+	fmt.Fprintln(output, "    --policy <policy.json> --receipt <receipt.json> [--engine-opt key=value]")
 	fmt.Fprintln(output, "")
 	fmt.Fprintln(output, "Options:")
 	fmt.Fprintln(output, "  --in          Input PDF path")
