@@ -1,0 +1,12 @@
+{
+  "policy_version": "1.0",
+  "encryption": {
+    "enabled": true,
+    "mode": "certificate",
+    "user_password": "InvalidMode123!",
+    "allow_print": false,
+    "allow_copy": false,
+    "allow_modify": false,
+    "crypto_profile": "strong"
+  }
+}

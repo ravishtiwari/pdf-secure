@@ -1,0 +1,13 @@
+{
+  "ok": false,
+  "engine_version": "0.0.1",
+  "policy_version": "1.0",
+  "warnings": [],
+  "error": {
+    "code": "E004",
+    "message": "PDF encryption failed",
+    "details": {
+      "reason": "Failed to apply AES-256 encryption"
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "policy_version": "1.0",
+  "encryption": {
+    "enabled": true,
+    "mode": "password",
+    "user_password": "LegacyCrypto123!",
+    "allow_print": true,
+    "allow_copy": true,
+    "allow_modify": false,
+    "crypto_profile": "legacy"
+  }
+}

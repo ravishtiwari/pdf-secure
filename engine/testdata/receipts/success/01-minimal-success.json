@@ -1,0 +1,12 @@
+{
+  "ok": true,
+  "engine_version": "0.0.1",
+  "policy_version": "1.0",
+  "warnings": [],
+  "error": null,
+  "document_id": "doc-a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "copy_id": "copy-f1e2d3c4-b5a6-0987-fedc-ba0987654321",
+  "input_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "output_sha256": "d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592",
+  "timestamp": "2024-01-15T10:30:00Z"
+}

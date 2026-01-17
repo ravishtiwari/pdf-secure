@@ -1,0 +1,11 @@
+{
+  "encryption": {
+    "enabled": true,
+    "mode": "password",
+    "user_password": "MissingVersion123!",
+    "allow_print": false,
+    "allow_copy": false,
+    "allow_modify": false,
+    "crypto_profile": "strong"
+  }
+}

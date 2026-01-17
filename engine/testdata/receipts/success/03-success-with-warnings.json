@@ -1,0 +1,17 @@
+{
+  "ok": true,
+  "engine_version": "0.0.1",
+  "policy_version": "1.0",
+  "warnings": [
+    {
+      "code": "W001",
+      "message": "Weak cryptography profile requested; proceeding with reduced security"
+    }
+  ],
+  "error": null,
+  "document_id": "doc-weakened-security-12345",
+  "copy_id": "copy-weakened-copy-67890",
+  "input_sha256": "111222333444555666777888999aaabbbcccdddeeefffaaabbbcccdddeee12345",
+  "output_sha256": "aaabbbcccdddeeefffaaabbbcccdddeee111222333444555666777888999fff00",
+  "timestamp": "2024-01-15T10:30:00Z"
+}

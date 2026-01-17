@@ -1,0 +1,19 @@
+{
+  "policy_version": "1.0",
+  "encryption": {
+    "enabled": true,
+    "mode": "password",
+    "user_password": "InvisibleTest123!",
+    "allow_print": false,
+    "allow_copy": false,
+    "allow_modify": false,
+    "crypto_profile": "strong"
+  },
+  "labels": {
+    "mode": "invisible",
+    "invisible": {
+      "enabled": true,
+      "namespace": "com.securepdf.v1"
+    }
+  }
+}

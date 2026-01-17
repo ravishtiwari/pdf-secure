@@ -1,0 +1,13 @@
+{
+  "ok": true,
+  "engine_version": "0.0.1",
+  "policy_version": "1.0",
+  "warnings": [],
+  "error": null,
+  "document_id": "doc-custom-document-id-12345",
+  "copy_id": "copy-custom-copy-id-67890",
+  "input_sha256": "abc123def456789012345678901234567890123456789012345678901234abcd",
+  "output_sha256": "def456abc789012345678901234567890123456789012345678901234567efgh",
+  "input_content_hash": "sha256:abc123def456789012345678901234567890123456789012345678901234abcd",
+  "timestamp": "2024-01-15T10:30:00Z"
+}

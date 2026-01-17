@@ -1,0 +1,25 @@
+{
+  "ok": true,
+  "engine_version": "0.0.1",
+  "policy_version": "1.0",
+  "warnings": [
+    {
+      "code": "W003",
+      "message": "Acknowledgment mechanism is viewer-dependent and may not display in all viewers"
+    },
+    {
+      "code": "W005",
+      "message": "Labels could not be applied to all requested pages"
+    },
+    {
+      "code": "W008",
+      "message": "Policy contained unknown fields that were ignored"
+    }
+  ],
+  "error": null,
+  "document_id": "doc-multi-warning-12345",
+  "copy_id": "copy-multi-warning-67890",
+  "input_sha256": "multi000warning000test000hash000value00012345678901234567890123abc",
+  "output_sha256": "output00multi000warning000hash000value00012345678901234567890def456",
+  "timestamp": "2024-01-15T10:30:00Z"
+}

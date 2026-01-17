@@ -1,0 +1,14 @@
+{
+  "ok": false,
+  "engine_version": "0.0.1",
+  "policy_version": "1.0",
+  "warnings": [],
+  "error": {
+    "code": "E003",
+    "message": "Input PDF uses unsupported features",
+    "details": {
+      "feature": "PDF 2.0 encryption",
+      "pdf_version": "2.0"
+    }
+  }
+}
