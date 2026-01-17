@@ -75,119 +75,69 @@ func Load(path string) (*Policy, error) {
 		return nil, fmt.Errorf("failed to read policy file: %w", err)
 	}
 
-	var p Policy
-	if err := json.Unmarshal(data, &p); err != nil {
+	var policy Policy
+	if err := json.Unmarshal(data, &policy); err != nil {
 		return nil, fmt.Errorf("failed to parse policy JSON: %w", err)
 	}
 
 	// Apply defaults
-	p.applyDefaults()
+	policy.applyDefaults()
 
-	if err := p.Validate(); err != nil {
-		return nil, err
+	validation := policy.Validate()
+	if !validation.Valid {
+		if validation.Error != nil {
+			return nil, fmt.Errorf("policy invalid (%s): %s", validation.Error.Code, validation.Error.Message)
+		}
+		return nil, fmt.Errorf("policy invalid")
 	}
 
-	return &p, nil
+	return &policy, nil
 }
 
 // applyDefaults sets default values for optional fields.
-func (p *Policy) applyDefaults() {
+func (policy *Policy) applyDefaults() {
 	// Default crypto profile to "strong" if not specified
-	if p.Encryption.CryptoProfile == "" {
-		p.Encryption.CryptoProfile = "strong"
+	if policy.Encryption.CryptoProfile == "" {
+		policy.Encryption.CryptoProfile = "strong"
 	}
 
 	// Default encryption mode to "password" if not specified but encryption is enabled
-	if p.Encryption.Enabled && p.Encryption.Mode == "" {
-		p.Encryption.Mode = "password"
+	if policy.Encryption.Enabled && policy.Encryption.Mode == "" {
+		policy.Encryption.Mode = "password"
 	}
 
 	// Default tamper detection hash algorithm
-	if p.TamperDetection != nil && p.TamperDetection.Enabled && p.TamperDetection.HashAlg == "" {
-		p.TamperDetection.HashAlg = "sha256"
+	if policy.TamperDetection != nil && policy.TamperDetection.Enabled && policy.TamperDetection.HashAlg == "" {
+		policy.TamperDetection.HashAlg = "sha256"
 	}
 
 	// Default invisible label namespace
-	if p.Labels != nil && p.Labels.Invisible != nil && p.Labels.Invisible.Namespace == "" {
-		p.Labels.Invisible.Namespace = "com.securepdf.v1"
+	if policy.Labels != nil && policy.Labels.Invisible != nil && policy.Labels.Invisible.Namespace == "" {
+		policy.Labels.Invisible.Namespace = "com.securepdf.v1"
 	}
 
 	// Default visible label placement and pages
-	if p.Labels != nil && p.Labels.Visible != nil {
-		if p.Labels.Visible.Placement == "" {
-			p.Labels.Visible.Placement = "footer"
+	if policy.Labels != nil && policy.Labels.Visible != nil {
+		if policy.Labels.Visible.Placement == "" {
+			policy.Labels.Visible.Placement = "footer"
 		}
-		if p.Labels.Visible.Pages == "" {
-			p.Labels.Visible.Pages = "all"
+		if policy.Labels.Visible.Pages == "" {
+			policy.Labels.Visible.Pages = "all"
 		}
 	}
 
 	// Default provenance IDs
-	if p.Provenance != nil && p.Provenance.Enabled {
-		if p.Provenance.DocumentID == "" {
-			p.Provenance.DocumentID = "auto"
+	if policy.Provenance != nil && policy.Provenance.Enabled {
+		if policy.Provenance.DocumentID == "" {
+			policy.Provenance.DocumentID = "auto"
 		}
-		if p.Provenance.CopyID == "" {
-			p.Provenance.CopyID = "auto"
+		if policy.Provenance.CopyID == "" {
+			policy.Provenance.CopyID = "auto"
 		}
 	}
 
 	// Default ack text
-	if p.Ack != nil && p.Ack.Text == "" {
-		p.Ack.Text = "OSS_DEFAULT"
+	if policy.Ack != nil && policy.Ack.Text == "" {
+		policy.Ack.Text = "OSS_DEFAULT"
 	}
-}
-
-// Validate checks for required fields and logical consistency in the policy.
-// This performs basic validation; comprehensive validation with warnings
-// is handled by the validate.go ValidatePolicy function.
-func (p *Policy) Validate() error {
-	// policy_version is required
-	if p.PolicyVersion == "" {
-		return fmt.Errorf("policy error: policy_version is required")
-	}
-
-	// If encryption is enabled, validate encryption config
-	if p.Encryption.Enabled {
-		// user_password is required
-		if p.Encryption.UserPassword == "" {
-			return fmt.Errorf("policy error: encryption.user_password is required when encryption is enabled")
-		}
-
-		// mode must be "password" in V1
-		if p.Encryption.Mode != "" && p.Encryption.Mode != "password" {
-			return fmt.Errorf("policy error: encryption.mode must be 'password' in V1, got '%s'", p.Encryption.Mode)
-		}
-
-		// crypto_profile must be valid
-		validProfiles := map[string]bool{"strong": true, "compat": true, "legacy": true}
-		if p.Encryption.CryptoProfile != "" && !validProfiles[p.Encryption.CryptoProfile] {
-			return fmt.Errorf("policy error: encryption.crypto_profile must be 'strong', 'compat', or 'legacy', got '%s'", p.Encryption.CryptoProfile)
-		}
-	}
-
-	// Validate labels config
-	if p.Labels != nil {
-		// mode must be valid
-		validModes := map[string]bool{"visible": true, "invisible": true, "off": true}
-		if p.Labels.Mode != "" && !validModes[p.Labels.Mode] {
-			return fmt.Errorf("policy error: labels.mode must be 'visible', 'invisible', or 'off', got '%s'", p.Labels.Mode)
-		}
-
-		// If labels mode is visible, visible.text is required
-		if p.Labels.Mode == "visible" {
-			if p.Labels.Visible == nil || p.Labels.Visible.Text == "" {
-				return fmt.Errorf("policy error: labels.visible.text is required when mode is visible")
-			}
-		}
-
-		// If labels visible pages is range, page_range is required
-		if p.Labels.Visible != nil {
-			if p.Labels.Visible.Pages == "range" && p.Labels.Visible.PageRange == "" {
-				return fmt.Errorf("policy error: labels.visible.page_range is required when pages is range")
-			}
-		}
-	}
-
-	return nil
 }
