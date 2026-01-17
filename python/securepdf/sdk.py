@@ -2,7 +2,6 @@ import json
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import List, Optional
 from .helpers.data_class import Policy, Receipt
 from .exception import SecurePDFEngineException
 
@@ -13,8 +12,19 @@ def secure_pdf(
     policy: Policy,
     engine_bin: str = "securepdf-engine",
 ) -> Receipt:
-    """
-    Secures a PDF using the Go engine.
+    """Secures a PDF using the Go engine.
+
+    Args:
+        input_path: Path to the input PDF file.
+        output_path: Path where the secured PDF will be written.
+        policy: Policy defining the security settings.
+        engine_bin: Path to the securepdf-engine binary.
+
+    Returns:
+        Receipt with transformation result and metadata.
+
+    Raises:
+        SecurePDFEngineException: If the engine binary is not found or fails.
     """
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".json", delete=False
@@ -50,7 +60,7 @@ def secure_pdf(
         if Path(receipt_path).exists():
             with open(receipt_path, "r") as f:
                 data = json.load(f)
-                return Receipt(**data)
+                return Receipt.from_dict(data)
 
         raise SecurePDFEngineException(
             f"Engine failed to produce receipt. Stderr: {result.stderr}"

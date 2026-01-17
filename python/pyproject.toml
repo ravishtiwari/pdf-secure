@@ -7,8 +7,9 @@ name = "securepdf"
 version = "0.0.1"
 description = "Minimal Python SDK for SecurePDF"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 dependencies = []
 
 [project.scripts]
 securepdf = "securepdf.cli:main"
+pdfsecure = "securepdf.sdk:main"
