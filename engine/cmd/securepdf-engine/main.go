@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"securepdf-engine/pkg/options"
 	"securepdf-engine/pkg/policy"
 	"securepdf-engine/pkg/receipt"
 )
@@ -76,13 +77,48 @@ func runSecure(args []string) error {
 		return fmt.Errorf("missing required flags: %s", strings.Join(missing, ", "))
 	}
 
-	// 1. Load Policy
+	// 1. Parse engine options
+	opts, err := options.Parse(engineOpts)
+	if err != nil {
+		return fmt.Errorf("engine options error: %w", err)
+	}
+
+	// 2. Load Policy
 	p, err := policy.Load(*policyPath)
 	if err != nil {
+		// Create error receipt for policy load failure
+		res := receipt.NewErrorWithDetails(
+			"0.0.1",
+			"unknown",
+			receipt.ErrPolicyInvalid,
+			err.Error(),
+			map[string]string{"stage": "load"},
+		)
+		_ = res.Save(*receiptPath)
 		return fmt.Errorf("policy error: %w", err)
 	}
 
-	// 2. Prepare Stub Receipt (transformation not yet implemented)
+	// 3. Validate policy with engine options
+	validation := p.ValidateWithOptions(opts)
+	if !validation.Valid {
+		// Create error receipt for validation failure
+		res := receipt.NewErrorWithDetails(
+			"0.0.1",
+			p.PolicyVersion,
+			validation.Error.Code,
+			validation.Error.Message,
+			validation.Error.Details,
+		)
+		// Include any warnings that occurred before the error
+		for _, w := range validation.Warnings {
+			res.AddWarning(w.Code, w.Message)
+		}
+		_ = res.Save(*receiptPath)
+		return fmt.Errorf("policy validation failed: %s", validation.Error.Message)
+	}
+
+	// 4. Prepare Stub Receipt (transformation not yet implemented)
+	// Include validation warnings in the receipt
 	res := receipt.NewErrorWithDetails(
 		"0.0.1",
 		p.PolicyVersion,
@@ -90,13 +126,22 @@ func runSecure(args []string) error {
 		"Transformation pipeline not yet implemented",
 		map[string]string{"reason": "stub"},
 	)
+	for _, w := range validation.Warnings {
+		res.AddWarning(w.Code, w.Message)
+	}
 
-	// 3. Write Receipt
+	// 5. Write Receipt
 	if err := res.Save(*receiptPath); err != nil {
 		return fmt.Errorf("failed to save receipt: %w", err)
 	}
 
 	fmt.Printf("Policy loaded: version=%s, encryption=%v (Password: ***)\n", p.PolicyVersion, p.Encryption.Enabled)
+	if len(validation.Warnings) > 0 {
+		fmt.Printf("Warnings: %d\n", len(validation.Warnings))
+		for _, w := range validation.Warnings {
+			fmt.Printf("  [%s] %s\n", w.Code, w.Message)
+		}
+	}
 	return nil
 }
 

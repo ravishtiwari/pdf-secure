@@ -1,5 +1,20 @@
 package policy
 
+// This file implements comprehensive policy validation against the V1 contract.
+// Validation is performed in stages:
+//   1. Version check (policy_version must be "1.0")
+//   2. Encryption validation (mode, password, crypto profile)
+//   3. Acknowledgment validation (only OSS_DEFAULT supported)
+//   4. Labels validation (mode, visible/invisible config)
+//   5. Provenance validation (enabled flag)
+//   6. Tamper detection validation (hash algorithm)
+//
+// The validation is designed to be permissive by default - weak crypto profiles
+// generate warnings but don't fail validation. Use ValidateWithOptions with
+// RejectWeakCrypto=true for stricter validation.
+//
+// Error codes are from the receipt package and match engine-contract.md.
+
 import (
 	"fmt"
 
@@ -8,13 +23,33 @@ import (
 )
 
 // ValidationResult captures the outcome of a policy validation.
+// It includes:
+//   - Valid: whether the policy passed validation
+//   - Warnings: non-fatal issues that should be reported to users
+//   - Error: the first fatal error encountered (nil if Valid is true)
 type ValidationResult struct {
-	Valid    bool
+	// Valid is true if the policy passes all validation checks.
+	Valid bool
+
+	// Warnings contains non-fatal issues detected during validation.
+	// Warnings are always collected, even if validation ultimately fails.
 	Warnings []receipt.Warning
-	Error    *receipt.Error
+
+	// Error is the first fatal validation error, or nil if Valid is true.
+	Error *receipt.Error
 }
 
 // Validate performs comprehensive validation against the V1 contract.
+// It checks all required fields, validates enum values, and generates
+// warnings for potentially problematic configurations (e.g., weak crypto).
+//
+// Returns a ValidationResult with:
+//   - Valid=true if the policy is acceptable
+//   - Valid=false with Error set if the policy is invalid
+//   - Warnings regardless of validity
+//
+// This method does not consider engine options. Use ValidateWithOptions
+// for context-aware validation that respects runtime settings.
 func (policy *Policy) Validate() *ValidationResult {
 	result := &ValidationResult{
 		Valid:    true,
@@ -43,7 +78,20 @@ func (policy *Policy) Validate() *ValidationResult {
 	return result
 }
 
-// ValidateWithOptions applies engine options (e.g., reject weak crypto) after base validation.
+// ValidateWithOptions applies engine runtime options after base validation.
+// This method first runs standard validation, then applies option-specific
+// rules that may convert warnings to errors.
+//
+// Currently supported options:
+//   - RejectWeakCrypto: converts W001 (weak crypto warning) to E001 (policy invalid)
+//
+// Example:
+//
+//	opts := &options.EngineOptions{RejectWeakCrypto: true}
+//	result := policy.ValidateWithOptions(opts)
+//	if !result.Valid {
+//	    // Policy uses weak crypto and was rejected
+//	}
 func (policy *Policy) ValidateWithOptions(opts *options.EngineOptions) *ValidationResult {
 	res := policy.Validate()
 	if !res.Valid {

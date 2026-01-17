@@ -3,15 +3,19 @@ import subprocess
 import tempfile
 from contextlib import ExitStack
 from pathlib import Path
+from typing import Optional, Union
 from .helpers.data_class import Policy, Receipt
 from .exception import SecurePDFEngineException
 
+PathLike = Union[str, Path]
+
 
 def secure_pdf(
-    input_path: Path,
-    output_path: Path,
+    input_path: PathLike,
+    output_path: PathLike,
     policy: Policy,
-    engine_bin: Path = Path("securepdf-engine"),
+    engine_bin: PathLike = Path("securepdf-engine"),
+    engine_opts: Optional[dict[str, str]] = None,
 ) -> Receipt:
     """Secures a PDF using the Go engine.
 
@@ -20,6 +24,12 @@ def secure_pdf(
         output_path: Path where the secured PDF will be written.
         policy: Policy defining the security settings.
         engine_bin: Path to the securepdf-engine binary.
+        engine_opts: Engine runtime options as key=value pairs.
+            Supported options:
+            - reject_weak_crypto: "true" or "false" (reject weak crypto profiles)
+            - timeout_ms: Timeout in milliseconds (e.g., "60000")
+            - max_input_mb: Maximum input file size in MB (e.g., "200")
+            - max_memory_mb: Maximum memory usage in MB (e.g., "512")
 
     Returns:
         Receipt with transformation result and metadata.
@@ -57,6 +67,11 @@ def secure_pdf(
             "--receipt",
             receipt_path,
         ]
+
+        # Add engine options
+        if engine_opts:
+            for key, value in engine_opts.items():
+                cmd.extend(["--engine-opt", f"{key}={value}"])
 
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
