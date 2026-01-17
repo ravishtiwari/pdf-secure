@@ -2,7 +2,7 @@
 
 import json
 import pytest
-from securepdf.helpers.data_class import (
+from securepdf.models import (
     Policy,
     Receipt,
     ReceiptWarning,

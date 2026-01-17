@@ -4,7 +4,7 @@ import tempfile
 from contextlib import ExitStack
 from pathlib import Path
 from typing import Optional, Union
-from .helpers.data_class import Policy, Receipt
+from .models import Policy, Receipt
 from .exception import SecurePDFEngineException
 
 PathLike = Union[str, Path]
