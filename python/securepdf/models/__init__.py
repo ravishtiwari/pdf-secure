@@ -1,22 +1,6 @@
-"""SecurePDF Python SDK.
+"""SecurePDF Models Package."""
 
-A Python wrapper for the SecurePDF Go engine providing PDF security operations.
-"""
-
-from .models import (
-    # Policy dataclasses
-    Policy,
-    EncryptionConfig,
-    AckConfig,
-    LabelsConfig,
-    VisibleLabel,
-    InvisibleLabel,
-    ProvenanceConfig,
-    TamperDetectionConfig,
-    # Receipt dataclasses
-    Receipt,
-    ReceiptWarning,
-    ReceiptError,
+from .codes import (
     # Warning codes
     WARN_WEAK_CRYPTO_REQUESTED,
     WARN_WEAK_CRYPTO_REJECTED,
@@ -40,13 +24,24 @@ from .models import (
     ERR_INPUT_READ_FAILED,
     ERR_INTERNAL_ERROR,
 )
-from .sdk import secure_pdf
-from .exception import SecurePDFEngineException
+from .policy import (
+    Policy,
+    EncryptionConfig,
+    AckConfig,
+    LabelsConfig,
+    VisibleLabel,
+    InvisibleLabel,
+    ProvenanceConfig,
+    TamperDetectionConfig,
+)
+from .receipt import (
+    Receipt,
+    ReceiptWarning,
+    ReceiptError,
+)
 
 __all__ = [
-    # Main function
-    "secure_pdf",
-    # Policy dataclasses
+    # Policy
     "Policy",
     "EncryptionConfig",
     "AckConfig",
@@ -55,11 +50,11 @@ __all__ = [
     "InvisibleLabel",
     "ProvenanceConfig",
     "TamperDetectionConfig",
-    # Receipt dataclasses
+    # Receipt
     "Receipt",
     "ReceiptWarning",
     "ReceiptError",
-    # Warning codes
+    # Codes
     "WARN_WEAK_CRYPTO_REQUESTED",
     "WARN_WEAK_CRYPTO_REJECTED",
     "WARN_VIEWER_DEPENDENT_ACK",
@@ -68,7 +63,6 @@ __all__ = [
     "WARN_PROVENANCE_PARTIALLY_APPLIED",
     "WARN_TAMPER_HASH_EMBED_FAILED",
     "WARN_UNKNOWN_POLICY_FIELD",
-    # Error codes
     "ERR_POLICY_INVALID",
     "ERR_INPUT_PDF_INVALID",
     "ERR_INPUT_PDF_UNSUPPORTED",
@@ -81,6 +75,4 @@ __all__ = [
     "ERR_RUNTIME_MEMORY_LIMIT",
     "ERR_INPUT_READ_FAILED",
     "ERR_INTERNAL_ERROR",
-    # Exceptions
-    "SecurePDFEngineException",
 ]
