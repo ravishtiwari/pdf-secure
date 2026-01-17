@@ -199,11 +199,11 @@ func Load(path string) (*Receipt, error) {
 }
 
 // =============================================================================
-// Legacy Compatibility (deprecated, will be removed in V2)
+// Legacy Compatibility (deprecated, will be removed in V1.4.x)
 // =============================================================================
 
 // Save writes the receipt to a JSON file (legacy function signature).
-// Deprecated: Use receipt.Save() method instead.
+// Deprecated: Use (*Receipt).Save instead. This function will be removed in v1.4.x
 func Save(path string, r *Receipt) error {
 	return r.Save(path)
 }
