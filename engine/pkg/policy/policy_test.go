@@ -202,6 +202,39 @@ func TestUnknownFieldsIgnored(t *testing.T) {
 	}
 }
 
+// TestLegacyPolicyCompatibility verifies legacy policy format is accepted.
+func TestLegacyPolicyCompatibility(t *testing.T) {
+	legacyJSON := `{
+		"password": "legacy-pass",
+		"visible_label": "CONFIDENTIAL",
+		"provenance": true,
+		"encryption": "aes256"
+	}`
+
+	tmpFile := filepath.Join(t.TempDir(), "legacy.json")
+	if err := os.WriteFile(tmpFile, []byte(legacyJSON), 0644); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+
+	p, err := Load(tmpFile)
+	if err != nil {
+		t.Fatalf("legacy policy should load: %v", err)
+	}
+
+	if p.PolicyVersion != "1.0" {
+		t.Errorf("expected policy_version=1.0, got %s", p.PolicyVersion)
+	}
+	if !p.Encryption.Enabled || p.Encryption.UserPassword != "legacy-pass" {
+		t.Error("expected legacy password to map to encryption.user_password")
+	}
+	if p.Labels == nil || p.Labels.Mode != "visible" || p.Labels.Visible == nil || p.Labels.Visible.Text != "CONFIDENTIAL" {
+		t.Error("expected legacy visible_label to map to labels.visible")
+	}
+	if p.Provenance == nil || !p.Provenance.Enabled {
+		t.Error("expected legacy provenance=true to enable provenance")
+	}
+}
+
 // TestSpecificValidFixtures verifies specific fixture behaviors
 func TestSpecificValidFixtures(t *testing.T) {
 	t.Run("02-full-features-enabled", func(t *testing.T) {
