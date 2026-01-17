@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"strings"
-	"time"
 
 	"securepdf-engine/pkg/policy"
 	"securepdf-engine/pkg/receipt"
@@ -83,22 +82,21 @@ func runSecure(args []string) error {
 		return fmt.Errorf("policy error: %w", err)
 	}
 
-	// 2. Prepare Stub Receipt
-	res := &receipt.Receipt{
-		ID:            "stub-id-123",
-		Timestamp:     time.Now(),
-		EngineVersion: "0.0.1",
-		PolicyVersion: "v1",
-		Status:        "error",
-		Errors:        []string{"transformation pipeline not yet implemented"},
-	}
+	// 2. Prepare Stub Receipt (transformation not yet implemented)
+	res := receipt.NewErrorWithDetails(
+		"0.0.1",
+		p.PolicyVersion,
+		receipt.ErrInternalError,
+		"Transformation pipeline not yet implemented",
+		map[string]string{"reason": "stub"},
+	)
 
 	// 3. Write Receipt
-	if err := receipt.Save(*receiptPath, res); err != nil {
+	if err := res.Save(*receiptPath); err != nil {
 		return fmt.Errorf("failed to save receipt: %w", err)
 	}
 
-	fmt.Printf("Securing PDF using policy for: %s (Password: ***)\n", p.VisibleLabel)
+	fmt.Printf("Policy loaded: version=%s, encryption=%v (Password: ***)\n", p.PolicyVersion, p.Encryption.Enabled)
 	return fmt.Errorf("transformation not implemented")
 }
 
