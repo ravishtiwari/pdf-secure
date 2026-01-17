@@ -77,7 +77,17 @@ func Load(path string) (*Policy, error) {
 
 	var policy Policy
 	if err := json.Unmarshal(data, &policy); err != nil {
-		return nil, fmt.Errorf("failed to parse policy JSON: %w", err)
+		// V1 unmarshal failed - try legacy format
+		if legacy, ok := parseLegacyPolicy(data); ok {
+			policy = legacy
+		} else {
+			return nil, fmt.Errorf("failed to parse policy JSON: %w", err)
+		}
+	} else if policy.PolicyVersion == "" {
+		// V1 parsed but no version - try legacy format
+		if legacy, ok := parseLegacyPolicy(data); ok {
+			policy = legacy
+		}
 	}
 
 	// Apply defaults
@@ -92,6 +102,64 @@ func Load(path string) (*Policy, error) {
 	}
 
 	return &policy, nil
+}
+
+type legacyPolicy struct {
+	Password       string `json:"password"`
+	VisibleLabel   string `json:"visible_label,omitempty"`
+	InvisibleLabel bool   `json:"invisible_label,omitempty"`
+	Provenance     bool   `json:"provenance,omitempty"`
+	Encryption     string `json:"encryption,omitempty"`
+	KeyDerivation  string `json:"key_derivation,omitempty"`
+}
+
+func parseLegacyPolicy(data []byte) (Policy, bool) {
+	var legacy legacyPolicy
+	if err := json.Unmarshal(data, &legacy); err != nil {
+		return Policy{}, false
+	}
+
+	if legacy.Password == "" &&
+		legacy.VisibleLabel == "" &&
+		!legacy.InvisibleLabel &&
+		!legacy.Provenance &&
+		legacy.Encryption == "" &&
+		legacy.KeyDerivation == "" {
+		return Policy{}, false
+	}
+
+	policy := Policy{
+		PolicyVersion: "1.0",
+		Encryption: EncryptionConfig{
+			Enabled:      true,
+			Mode:         "password",
+			UserPassword: legacy.Password,
+		},
+	}
+
+	if legacy.VisibleLabel != "" {
+		policy.Labels = &LabelsConfig{
+			Mode: "visible",
+			Visible: &VisibleLabel{
+				Text: legacy.VisibleLabel,
+			},
+		}
+	} else if legacy.InvisibleLabel {
+		policy.Labels = &LabelsConfig{
+			Mode: "invisible",
+			Invisible: &InvisibleLabel{
+				Enabled: true,
+			},
+		}
+	}
+
+	if legacy.Provenance {
+		policy.Provenance = &ProvenanceConfig{
+			Enabled: true,
+		}
+	}
+
+	return policy, true
 }
 
 // applyDefaults sets default values for optional fields.
