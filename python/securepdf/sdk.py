@@ -1,16 +1,17 @@
 import json
 import subprocess
 import tempfile
+from contextlib import ExitStack
 from pathlib import Path
 from .helpers.data_class import Policy, Receipt
 from .exception import SecurePDFEngineException
 
 
 def secure_pdf(
-    input_path: str,
-    output_path: str,
+    input_path: Path,
+    output_path: Path,
     policy: Policy,
-    engine_bin: str = "securepdf-engine",
+    engine_bin: Path = Path("securepdf-engine"),
 ) -> Receipt:
     """Secures a PDF using the Go engine.
 
@@ -26,12 +27,23 @@ def secure_pdf(
     Raises:
         SecurePDFEngineException: If the engine binary is not found or fails.
     """
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmpdir_path = Path(tmpdir)
-        policy_path = tmpdir_path / "policy.json"
-        receipt_path = tmpdir_path / "receipt.json"
+    with ExitStack() as stack:
+        policy_file = stack.enter_context(
+            tempfile.NamedTemporaryFile("w", suffix=".json", delete=False)
+        )
+        receipt_file = stack.enter_context(
+            tempfile.NamedTemporaryFile("w", suffix=".json", delete=False)
+        )
+
+        policy_path = Path(policy_file.name)
+        receipt_path = Path(receipt_file.name)
+
+        stack.callback(lambda: policy_path.unlink(missing_ok=True))
+        stack.callback(lambda: receipt_path.unlink(missing_ok=True))
 
         policy_path.write_text(policy.to_json(), encoding="utf-8")
+        policy_path.chmod(0o600)
+        receipt_path.chmod(0o600)
 
         cmd = [
             engine_bin,
@@ -41,16 +53,20 @@ def secure_pdf(
             "--out",
             output_path,
             "--policy",
-            str(policy_path),
+            policy_path,
             "--receipt",
-            str(receipt_path),
+            receipt_path,
         ]
 
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
         except FileNotFoundError as e:
             raise SecurePDFEngineException(
                 f"Engine binary not found: {engine_bin}"
+            ) from e
+        except OSError as e:
+            raise SecurePDFEngineException(
+                f"Failed to execute engine binary: {e}"
             ) from e
 
         if result.returncode != 0:

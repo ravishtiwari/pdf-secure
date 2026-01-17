@@ -97,47 +97,50 @@ func Load(path string) (*Policy, error) {
 // applyDefaults sets default values for optional fields.
 func (policy *Policy) applyDefaults() {
 	// Default crypto profile to "strong" if not specified
-	if policy.Encryption.CryptoProfile == "" {
-		policy.Encryption.CryptoProfile = "strong"
-	}
+	policy.Encryption.CryptoProfile = defaultCryptoProfile(policy.Encryption)
 
 	// Default encryption mode to "password" if not specified but encryption is enabled
-	if policy.Encryption.Enabled && policy.Encryption.Mode == "" {
-		policy.Encryption.Mode = "password"
+	if policy.Encryption.Enabled {
+		policy.Encryption.Mode = defaultEncryptionMode(policy.Encryption)
 	}
 
 	// Default tamper detection hash algorithm
 	if policy.TamperDetection != nil && policy.TamperDetection.Enabled && policy.TamperDetection.HashAlg == "" {
-		policy.TamperDetection.HashAlg = "sha256"
+		policy.TamperDetection.HashAlg = defaultTamperHashAlg(policy.TamperDetection)
+	}
+
+	// Default labels mode
+	if policy.Labels != nil && policy.Labels.Mode == "" {
+		policy.Labels.Mode = defaultLabelsMode(policy.Labels)
 	}
 
 	// Default invisible label namespace
 	if policy.Labels != nil && policy.Labels.Invisible != nil && policy.Labels.Invisible.Namespace == "" {
-		policy.Labels.Invisible.Namespace = "com.securepdf.v1"
+		policy.Labels.Invisible.Namespace = defaultInvisibleNamespace(policy.Labels.Invisible)
 	}
 
 	// Default visible label placement and pages
 	if policy.Labels != nil && policy.Labels.Visible != nil {
 		if policy.Labels.Visible.Placement == "" {
-			policy.Labels.Visible.Placement = "footer"
+			policy.Labels.Visible.Placement = defaultVisiblePlacement(policy.Labels.Visible)
 		}
 		if policy.Labels.Visible.Pages == "" {
-			policy.Labels.Visible.Pages = "all"
+			policy.Labels.Visible.Pages = defaultVisiblePages(policy.Labels.Visible)
 		}
 	}
 
 	// Default provenance IDs
 	if policy.Provenance != nil && policy.Provenance.Enabled {
 		if policy.Provenance.DocumentID == "" {
-			policy.Provenance.DocumentID = "auto"
+			policy.Provenance.DocumentID = defaultProvenanceID(policy.Provenance.DocumentID)
 		}
 		if policy.Provenance.CopyID == "" {
-			policy.Provenance.CopyID = "auto"
+			policy.Provenance.CopyID = defaultProvenanceID(policy.Provenance.CopyID)
 		}
 	}
 
 	// Default ack text
 	if policy.Ack != nil && policy.Ack.Text == "" {
-		policy.Ack.Text = "OSS_DEFAULT"
+		policy.Ack.Text = defaultAckText(policy.Ack)
 	}
 }
