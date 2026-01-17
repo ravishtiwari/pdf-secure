@@ -279,6 +279,57 @@ class TestSecurePdfFunction:
             )
         assert "Engine binary not found" in str(exc_info.value)
 
+    def test_secure_pdf_with_engine_opts_missing_engine(self):
+        """Test error handling with engine_opts when engine is not found."""
+        policy = Policy(encryption=EncryptionConfig(user_password="test"))
+        with pytest.raises(SecurePDFEngineException) as exc_info:
+            secure_pdf(
+                "dummy.pdf",
+                "out.pdf",
+                policy,
+                engine_bin="nonexistent-engine-binary",
+                engine_opts={"reject_weak_crypto": "true"},
+            )
+        assert "Engine binary not found" in str(exc_info.value)
+
+    def test_secure_pdf_engine_opts_parameter_type(self):
+        """Test that engine_opts accepts dict and is optional."""
+        policy = Policy(encryption=EncryptionConfig(user_password="test"))
+
+        # Test with None (default)
+        with pytest.raises(SecurePDFEngineException):
+            secure_pdf(
+                "dummy.pdf",
+                "out.pdf",
+                policy,
+                engine_bin="nonexistent-engine-binary",
+                engine_opts=None,
+            )
+
+        # Test with empty dict
+        with pytest.raises(SecurePDFEngineException):
+            secure_pdf(
+                "dummy.pdf",
+                "out.pdf",
+                policy,
+                engine_bin="nonexistent-engine-binary",
+                engine_opts={},
+            )
+
+        # Test with multiple options
+        with pytest.raises(SecurePDFEngineException):
+            secure_pdf(
+                "dummy.pdf",
+                "out.pdf",
+                policy,
+                engine_bin="nonexistent-engine-binary",
+                engine_opts={
+                    "reject_weak_crypto": "true",
+                    "timeout_ms": "30000",
+                    "max_input_mb": "100",
+                },
+            )
+
 
 class TestEncryptionConfig:
     """Tests for EncryptionConfig dataclass."""

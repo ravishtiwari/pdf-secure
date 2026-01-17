@@ -33,7 +33,7 @@ repos:
     hooks:
       - id: pytest
         name: pytest
-        entry: python3 -m pytest python/tests/ -v
+        entry: uv run pytest python/tests/ -v
         language: system
         files: \.py$
         pass_filenames: false

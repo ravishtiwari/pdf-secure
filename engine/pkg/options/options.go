@@ -1,3 +1,20 @@
+// Package options provides engine runtime configuration parsing.
+//
+// Engine options are runtime settings that control engine behavior but are not
+// part of the policy schema. They are passed via --engine-opt flags on the CLI.
+//
+// Supported Options:
+//   - reject_weak_crypto: When true, reject policies that use compat/legacy crypto profiles
+//   - timeout_ms: Maximum execution time in milliseconds (default: 60000)
+//   - max_input_mb: Maximum input PDF size in megabytes (default: 200)
+//   - max_memory_mb: Maximum memory usage in megabytes (default: 512)
+//
+// Usage:
+//
+//	securepdf-engine secure --engine-opt reject_weak_crypto=true --engine-opt timeout_ms=30000
+//
+// Unknown options are silently ignored for forward compatibility, allowing newer
+// SDKs to pass options that older engines don't understand.
 package options
 
 import (
@@ -7,14 +24,31 @@ import (
 )
 
 // EngineOptions holds runtime configuration flags provided via --engine-opt.
+// These settings control engine behavior independently of the policy.
 type EngineOptions struct {
+	// RejectWeakCrypto when true causes validation to fail if the policy
+	// requests a weak crypto profile (compat or legacy). Default: false.
 	RejectWeakCrypto bool
-	TimeoutMs        int
-	MaxInputMB       int
-	MaxMemoryMB      int
+
+	// TimeoutMs is the maximum execution time in milliseconds.
+	// A value of 0 disables the timeout. Default: 60000 (60 seconds).
+	TimeoutMs int
+
+	// MaxInputMB is the maximum allowed input PDF file size in megabytes.
+	// Requests with larger inputs are rejected. Default: 200 MB.
+	MaxInputMB int
+
+	// MaxMemoryMB is the maximum memory the engine may use in megabytes.
+	// Default: 512 MB.
+	MaxMemoryMB int
 }
 
 // Default returns EngineOptions populated with safe defaults.
+// These defaults are suitable for most production deployments:
+//   - RejectWeakCrypto: false (allows compat/legacy for backward compatibility)
+//   - TimeoutMs: 60000 (60 seconds)
+//   - MaxInputMB: 200 (200 MB max input)
+//   - MaxMemoryMB: 512 (512 MB max memory)
 func Default() *EngineOptions {
 	return &EngineOptions{
 		RejectWeakCrypto: false,
@@ -25,6 +59,15 @@ func Default() *EngineOptions {
 }
 
 // Parse parses --engine-opt key=value entries into EngineOptions.
+// Unknown keys are silently ignored for forward compatibility.
+//
+// Returns an error if:
+//   - An entry is not in key=value format
+//   - A known key has an invalid value (e.g., non-numeric timeout_ms)
+//
+// Example:
+//
+//	opts, err := Parse([]string{"reject_weak_crypto=true", "timeout_ms=30000"})
 func Parse(entries []string) (*EngineOptions, error) {
 	opts := Default()
 
@@ -35,6 +78,10 @@ func Parse(entries []string) (*EngineOptions, error) {
 		}
 		key := strings.TrimSpace(parts[0])
 		value := strings.TrimSpace(parts[1])
+
+		if key == "" {
+			return nil, fmt.Errorf("invalid engine-opt format %q (empty key)", entry)
+		}
 
 		switch key {
 		case "reject_weak_crypto":
