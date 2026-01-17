@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestLoadSuccessReceipts tests loading all success receipt fixtures.
@@ -22,6 +23,11 @@ func TestLoadSuccessReceipts(t *testing.T) {
 		}
 		t.Run(file.Name(), func(t *testing.T) {
 			path := filepath.Join(successDir, file.Name())
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("failed to read fixture: %v", err)
+			}
+
 			r, err := Load(path)
 			if err != nil {
 				t.Fatalf("failed to load receipt: %v", err)
@@ -46,6 +52,22 @@ func TestLoadSuccessReceipts(t *testing.T) {
 			}
 			if r.Warnings == nil {
 				t.Error("expected warnings to be non-nil (empty array)")
+			}
+
+			var raw struct {
+				Timestamp string `json:"timestamp"`
+			}
+			if err := json.Unmarshal(data, &raw); err != nil {
+				t.Fatalf("failed to unmarshal raw timestamp: %v", err)
+			}
+			if raw.Timestamp != "" {
+				expected, err := time.Parse(time.RFC3339, raw.Timestamp)
+				if err != nil {
+					t.Fatalf("fixture timestamp is not RFC3339: %v", err)
+				}
+				if !r.Timestamp.Equal(expected) {
+					t.Errorf("expected timestamp %s, got %s", expected.Format(time.RFC3339), r.Timestamp.Format(time.RFC3339))
+				}
 			}
 
 			t.Logf("loaded success receipt: ok=%v, warnings=%d", r.OK, len(r.Warnings))

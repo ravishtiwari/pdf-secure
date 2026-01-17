@@ -26,18 +26,13 @@ def secure_pdf(
     Raises:
         SecurePDFEngineException: If the engine binary is not found or fails.
     """
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".json", delete=False
-    ) as policy_file:
-        policy_file.write(policy.to_json())
-        policy_path = policy_file.name
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir_path = Path(tmpdir)
+        policy_path = tmpdir_path / "policy.json"
+        receipt_path = tmpdir_path / "receipt.json"
 
-    with tempfile.NamedTemporaryFile(
-        mode="r", suffix=".json", delete=False
-    ) as receipt_file:
-        receipt_path = receipt_file.name
+        policy_path.write_text(policy.to_json(), encoding="utf-8")
 
-    try:
         cmd = [
             engine_bin,
             "secure",
@@ -46,10 +41,11 @@ def secure_pdf(
             "--out",
             output_path,
             "--policy",
-            policy_path,
+            str(policy_path),
             "--receipt",
-            receipt_path,
+            str(receipt_path),
         ]
+
         try:
             result = subprocess.run(cmd, capture_output=True, text=True)
         except FileNotFoundError as e:
@@ -57,15 +53,22 @@ def secure_pdf(
                 f"Engine binary not found: {engine_bin}"
             ) from e
 
-        if Path(receipt_path).exists():
-            with open(receipt_path, "r") as f:
-                data = json.load(f)
-                return Receipt.from_dict(data)
+        if result.returncode != 0:
+            raise SecurePDFEngineException(
+                "Engine exited with code "
+                f"{result.returncode}. Stderr: {result.stderr.strip()}"
+            )
 
-        raise SecurePDFEngineException(
-            f"Engine failed to produce receipt. Stderr: {result.stderr}"
-        )
+        if not receipt_path.exists():
+            raise SecurePDFEngineException(
+                f"Engine failed to produce receipt. Stderr: {result.stderr.strip()}"
+            )
 
-    finally:
-        Path(policy_path).unlink(missing_ok=True)
-        Path(receipt_path).unlink(missing_ok=True)
+        try:
+            data = json.loads(receipt_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise SecurePDFEngineException(
+                "Engine produced invalid receipt JSON"
+            ) from exc
+
+        return Receipt.from_dict(data)

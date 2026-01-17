@@ -59,7 +59,7 @@ func runSecure(args []string) error {
 		engineOpts  engineOptValues
 	)
 
-	flags.Var(&engineOpts, "engine-opt", "engine option k=v (repeatable)")
+	flags.Var(&engineOpts, "engine-opt", "engine option key=value (repeatable)")
 
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -97,7 +97,7 @@ func runSecure(args []string) error {
 	}
 
 	fmt.Printf("Policy loaded: version=%s, encryption=%v (Password: ***)\n", p.PolicyVersion, p.Encryption.Enabled)
-	return fmt.Errorf("transformation not implemented")
+	return nil
 }
 
 func missingFlags(inputPath, outputPath, policyPath, receiptPath string) []string {

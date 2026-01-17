@@ -104,7 +104,7 @@ class Policy:
                 if value is None:
                     continue  # Skip None values
                 if hasattr(value, "__dataclass_fields__"):
-                    result[key] = asdict(value)
+                    result[key] = asdict(value, dict_factory=dict_factory)
                 else:
                     result[key] = value
             return result
