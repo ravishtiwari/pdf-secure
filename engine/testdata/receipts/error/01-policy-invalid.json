@@ -1,0 +1,14 @@
+{
+  "ok": false,
+  "engine_version": "0.0.1",
+  "policy_version": "1.0",
+  "warnings": [],
+  "error": {
+    "code": "E001",
+    "message": "Policy is invalid or malformed",
+    "details": {
+      "field": "encryption.user_password",
+      "reason": "user_password is required when encryption.mode is password"
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "ok": false,
+  "engine_version": "0.0.1",
+  "policy_version": "1.0",
+  "warnings": [
+    {
+      "code": "W004",
+      "message": "Input PDF contains unsupported features that may not be fully preserved"
+    }
+  ],
+  "error": {
+    "code": "E009",
+    "message": "Transformation exceeded time limit",
+    "details": {
+      "timeout_ms": "30000",
+      "elapsed_ms": "30001"
+    }
+  }
+}

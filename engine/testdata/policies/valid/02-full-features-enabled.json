@@ -1,0 +1,38 @@
+{
+  "policy_version": "1.0",
+  "encryption": {
+    "enabled": true,
+    "mode": "password",
+    "user_password": "FullFeatured2024!",
+    "allow_print": true,
+    "allow_copy": false,
+    "allow_modify": false,
+    "crypto_profile": "strong"
+  },
+  "ack": {
+    "required": true,
+    "text": "OSS_DEFAULT",
+    "viewer_dependent": true
+  },
+  "labels": {
+    "mode": "visible",
+    "visible": {
+      "text": "CONFIDENTIAL - Internal Use Only",
+      "placement": "footer",
+      "pages": "all"
+    },
+    "invisible": {
+      "enabled": true,
+      "namespace": "com.securepdf.v1"
+    }
+  },
+  "provenance": {
+    "enabled": true,
+    "document_id": "auto",
+    "copy_id": "auto"
+  },
+  "tamper_detection": {
+    "enabled": true,
+    "hash_alg": "sha256"
+  }
+}

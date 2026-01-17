@@ -1,0 +1,14 @@
+{
+  "ok": false,
+  "engine_version": "0.0.1",
+  "policy_version": "1.0",
+  "warnings": [],
+  "error": {
+    "code": "E002",
+    "message": "Input file is not a valid PDF",
+    "details": {
+      "path": "/path/to/invalid.pdf",
+      "reason": "File does not start with %PDF header"
+    }
+  }
+}

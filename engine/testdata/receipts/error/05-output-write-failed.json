@@ -1,0 +1,14 @@
+{
+  "ok": false,
+  "engine_version": "0.0.1",
+  "policy_version": "1.0",
+  "warnings": [],
+  "error": {
+    "code": "E008",
+    "message": "Output file could not be written",
+    "details": {
+      "path": "/readonly/path/output.pdf",
+      "reason": "Permission denied"
+    }
+  }
+}
