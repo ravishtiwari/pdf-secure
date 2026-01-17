@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"time"
 )
@@ -149,8 +150,9 @@ func generateUUID() string {
 	b := make([]byte, 16)
 	_, err := rand.Read(b)
 	if err != nil {
+		log.Printf("receipt: crypto/rand read failed: %v; falling back to timestamp-based ID", err)
 		// Fallback to timestamp-based ID if crypto/rand fails
-		return fmt.Sprintf("%x", time.Now().UnixNano())
+		return fmt.Sprintf("fallback-%x", time.Now().UnixNano())
 	}
 	// Set version (4) and variant (RFC 4122)
 	b[6] = (b[6] & 0x0f) | 0x40

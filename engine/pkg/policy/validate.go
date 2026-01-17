@@ -90,10 +90,8 @@ func (policy *Policy) validateEncryption(result *ValidationResult) *receipt.Erro
 		return nil
 	}
 
-	if enc.Mode == "" {
-		enc.Mode = "password"
-	}
-	if enc.Mode != "password" {
+	mode := defaultEncryptionMode(enc)
+	if mode != "password" {
 		return validationError("encryption.mode", "encryption.mode must be 'password' in V1")
 	}
 
@@ -101,18 +99,15 @@ func (policy *Policy) validateEncryption(result *ValidationResult) *receipt.Erro
 		return validationError("encryption.user_password", "encryption.user_password is required when encryption.enabled is true")
 	}
 
-	if enc.CryptoProfile == "" {
-		enc.CryptoProfile = "strong"
-	}
-
-	switch enc.CryptoProfile {
+	cryptoProfile := defaultCryptoProfile(enc)
+	switch cryptoProfile {
 	case "strong":
 		// ok
 	case "compat", "legacy":
 		msg, _ := receipt.WarningMessage(receipt.WarnWeakCryptoRequested)
 		result.Warnings = append(result.Warnings, receipt.Warning{
 			Code:    receipt.WarnWeakCryptoRequested,
-			Message: fmt.Sprintf("%s (profile=%s)", msg, enc.CryptoProfile),
+			Message: fmt.Sprintf("%s (profile=%s)", msg, cryptoProfile),
 		})
 	default:
 		return validationError("encryption.crypto_profile", "crypto_profile must be one of strong|compat|legacy")
@@ -125,7 +120,8 @@ func (policy *Policy) validateAck() *receipt.Error {
 	if policy.Ack == nil {
 		return nil
 	}
-	if policy.Ack.Text != "OSS_DEFAULT" {
+	text := defaultAckText(policy.Ack)
+	if text != "OSS_DEFAULT" {
 		return validationError("ack.text", "only OSS_DEFAULT is supported in V1")
 	}
 	return nil
@@ -136,11 +132,7 @@ func (policy *Policy) validateLabels() *receipt.Error {
 		return nil
 	}
 
-	mode := policy.Labels.Mode
-	if mode == "" {
-		mode = "off"
-		policy.Labels.Mode = "off"
-	}
+	mode := defaultLabelsMode(policy.Labels)
 
 	switch mode {
 	case "visible":
@@ -151,31 +143,24 @@ func (policy *Policy) validateLabels() *receipt.Error {
 		if vis.Text == "" {
 			return validationError("labels.visible.text", "labels.visible.text is required when mode=visible")
 		}
-		switch vis.Placement {
-		case "", "footer", "header":
-			if vis.Placement == "" {
-				vis.Placement = "footer"
-			}
+		placement := defaultVisiblePlacement(vis)
+		switch placement {
+		case "footer", "header":
 		default:
 			return validationError("labels.visible.placement", "placement must be footer|header")
 		}
-		switch vis.Pages {
-		case "", "all", "first", "range":
-			if vis.Pages == "" {
-				vis.Pages = "all"
-			}
+		pages := defaultVisiblePages(vis)
+		switch pages {
+		case "all", "first", "range":
 		default:
 			return validationError("labels.visible.pages", "pages must be all|first|range")
 		}
-		if vis.Pages == "range" && vis.PageRange == "" {
+		if pages == "range" && vis.PageRange == "" {
 			return validationError("labels.visible.page_range", "page_range required when pages=range")
 		}
 	case "invisible":
 		if policy.Labels.Invisible == nil {
 			return validationError("labels.invisible", "labels.invisible configuration required when mode=invisible")
-		}
-		if policy.Labels.Invisible.Namespace == "" {
-			policy.Labels.Invisible.Namespace = "com.securepdf.v1"
 		}
 	case "off":
 		// ok
@@ -190,12 +175,6 @@ func (policy *Policy) validateProvenance() *receipt.Error {
 	if policy.Provenance == nil || !policy.Provenance.Enabled {
 		return nil
 	}
-	if policy.Provenance.DocumentID == "" {
-		policy.Provenance.DocumentID = "auto"
-	}
-	if policy.Provenance.CopyID == "" {
-		policy.Provenance.CopyID = "auto"
-	}
 	return nil
 }
 
@@ -203,10 +182,8 @@ func (policy *Policy) validateTamperDetection() *receipt.Error {
 	if policy.TamperDetection == nil || !policy.TamperDetection.Enabled {
 		return nil
 	}
-	if policy.TamperDetection.HashAlg == "" {
-		policy.TamperDetection.HashAlg = "sha256"
-	}
-	if policy.TamperDetection.HashAlg != "sha256" {
+	hashAlg := defaultTamperHashAlg(policy.TamperDetection)
+	if hashAlg != "sha256" {
 		return validationError("tamper_detection.hash_alg", "only sha256 is supported in V1")
 	}
 	return nil
