@@ -32,12 +32,11 @@ func TestE2EValidPolicyCreatesReceipt(t *testing.T) {
 		"--receipt", receiptPath,
 	}
 
-	// Note: runSecure returns nil on success (even though pipeline is stub)
+	// Note: runSecure returns error because pipeline is stubbed
 	err := runSecure(args)
 
-	// Currently returns nil because policy validates successfully
-	if err != nil {
-		t.Logf("runSecure returned error (expected for stub): %v", err)
+	if err == nil {
+		t.Error("expected error for stubbed transformation")
 	}
 
 	// Receipt should be created
@@ -57,8 +56,11 @@ func TestE2EValidPolicyCreatesReceipt(t *testing.T) {
 	if r.PolicyVersion != "1.0" {
 		t.Errorf("expected policy_version=1.0, got %s", r.PolicyVersion)
 	}
-	if r.Warnings == nil {
-		t.Error("warnings should be non-nil")
+	if r.OK {
+		t.Error("expected ok=false for stubbed transformation")
+	}
+	if r.Error == nil || r.Error.Code != receipt.ErrInternalError {
+		t.Errorf("expected error code %s, got %+v", receipt.ErrInternalError, r.Error)
 	}
 }
 
@@ -157,15 +159,19 @@ func TestE2EWeakCryptoWithoutRejection(t *testing.T) {
 		"--receipt", receiptPath,
 	}
 
-	// Should succeed (with warning)
+	// Should return stub error (with warning)
 	err := runSecure(args)
-	if err != nil {
-		t.Logf("runSecure returned error: %v", err)
+	if err == nil {
+		t.Error("expected error for stubbed transformation")
 	}
 
 	r, err := receipt.Load(receiptPath)
 	if err != nil {
 		t.Fatalf("failed to load receipt: %v", err)
+	}
+
+	if r.Error == nil || r.Error.Code != receipt.ErrInternalError {
+		t.Errorf("expected error code %s, got %+v", receipt.ErrInternalError, r.Error)
 	}
 
 	// Check for weak crypto warning

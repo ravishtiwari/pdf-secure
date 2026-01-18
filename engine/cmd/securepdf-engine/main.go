@@ -37,6 +37,12 @@ func main() {
 	case "secure":
 		if err := runSecure(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, err)
+			var exitErr *exitError
+			if errors.As(err, &exitErr) {
+				if code, ok := receipt.ExitCodeForError(exitErr.code); ok {
+					os.Exit(code)
+				}
+			}
 			os.Exit(1)
 		}
 	case "help", "-h", "--help":
@@ -46,6 +52,21 @@ func main() {
 		printUsage(os.Stderr)
 		os.Exit(1)
 	}
+}
+
+const engineVersion = "0.0.1"
+
+type exitError struct {
+	code string
+	err  error
+}
+
+func (e *exitError) Error() string {
+	return e.err.Error()
+}
+
+func (e *exitError) Unwrap() error {
+	return e.err
 }
 
 func runSecure(args []string) error {
@@ -80,54 +101,63 @@ func runSecure(args []string) error {
 	// 1. Parse engine options
 	opts, err := options.Parse(engineOpts)
 	if err != nil {
-		return fmt.Errorf("engine options error: %w", err)
+		res := receipt.NewErrorWithDetails(
+			engineVersion,
+			"1.0",
+			receipt.ErrInternalError,
+			"invalid engine option",
+			map[string]string{"error": err.Error()},
+		)
+		_ = res.Save(*receiptPath)
+		return &exitError{code: receipt.ErrInternalError, err: fmt.Errorf("engine options error: %w", err)}
 	}
 
-	// 2. Load Policy
-	p, err := policy.Load(*policyPath)
+	// 2. Load Policy + validate with options
+	p, validation, err := policy.LoadWithOptions(*policyPath, opts)
 	if err != nil {
-		// Create error receipt for policy load failure
 		res := receipt.NewErrorWithDetails(
-			"0.0.1",
-			"unknown",
+			engineVersion,
+			"1.0",
 			receipt.ErrPolicyInvalid,
-			err.Error(),
-			map[string]string{"stage": "load"},
+			"policy parse error",
+			map[string]string{"error": err.Error()},
 		)
 		_ = res.Save(*receiptPath)
-		return fmt.Errorf("policy error: %w", err)
+		return &exitError{code: receipt.ErrPolicyInvalid, err: fmt.Errorf("policy error: %w", err)}
 	}
 
-	// 3. Validate policy with engine options
-	validation := p.ValidateWithOptions(opts)
-	if !validation.Valid {
-		// Create error receipt for validation failure
-		res := receipt.NewErrorWithDetails(
-			"0.0.1",
-			p.PolicyVersion,
-			validation.Error.Code,
-			validation.Error.Message,
-			validation.Error.Details,
-		)
-		// Include any warnings that occurred before the error
-		for _, w := range validation.Warnings {
-			res.AddWarning(w.Code, w.Message)
+	if validation != nil && !validation.Valid {
+		code := receipt.ErrPolicyInvalid
+		message := "policy invalid"
+		var details map[string]string
+		if validation.Error != nil {
+			code = validation.Error.Code
+			message = validation.Error.Message
+			details = validation.Error.Details
 		}
+		res := receipt.NewErrorWithDetails(
+			engineVersion,
+			p.PolicyVersion,
+			code,
+			message,
+			details,
+		)
+		res.Warnings = append(res.Warnings, validation.Warnings...)
 		_ = res.Save(*receiptPath)
-		return fmt.Errorf("policy validation failed: %s", validation.Error.Message)
+		return &exitError{code: code, err: fmt.Errorf("policy validation failed: %s", message)}
 	}
 
 	// 4. Prepare Stub Receipt (transformation not yet implemented)
 	// Include validation warnings in the receipt
 	res := receipt.NewErrorWithDetails(
-		"0.0.1",
+		engineVersion,
 		p.PolicyVersion,
 		receipt.ErrInternalError,
 		"Transformation pipeline not yet implemented",
 		map[string]string{"reason": "stub"},
 	)
-	for _, w := range validation.Warnings {
-		res.AddWarning(w.Code, w.Message)
+	if validation != nil {
+		res.Warnings = append(res.Warnings, validation.Warnings...)
 	}
 
 	// 5. Write Receipt
@@ -142,7 +172,7 @@ func runSecure(args []string) error {
 			fmt.Printf("  [%s] %s\n", w.Code, w.Message)
 		}
 	}
-	return nil
+	return &exitError{code: receipt.ErrInternalError, err: errors.New("transformation pipeline not yet implemented")}
 }
 
 func missingFlags(inputPath, outputPath, policyPath, receiptPath string) []string {

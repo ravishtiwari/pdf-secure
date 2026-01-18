@@ -21,7 +21,7 @@ repos:
         files: '\.go$'
       - id: go-unit-tests
         name: go-unit-tests
-        entry: bash -c "cd engine && go test ./..."
+        entry: bash -c "cd engine && go clean -testcache && go clean  && go test ./..."
         language: system
         files: '\.go$'
   - repo: https://github.com/psf/black
