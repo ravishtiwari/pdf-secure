@@ -48,3 +48,21 @@ PDF + Policy → [ Go Engine ] → Secured PDF + Structured Receipt
 ---
 
 *Note: SecurePDF is currently in active development (V1.0 Alpha).*
+
+## 🔧 CLI Usage (Engine)
+
+```bash
+securepdf-engine secure \
+  --in input.pdf \
+  --out secured.pdf \
+  --policy policy.json \
+  --receipt receipt.json \
+  --engine-opt reject_weak_crypto=true \
+  --engine-opt timeout_ms=60000
+```
+
+Supported engine options:
+- `reject_weak_crypto` (true|false)
+- `timeout_ms` (milliseconds)
+- `max_input_mb` (MB)
+- `max_memory_mb` (MB)

@@ -17,5 +17,5 @@ lint:
 	@cd python && ruff check .
 
 test:
-	@cd engine && go test ./...
+	@cd engine && go clean -testcache && go clean  && go test ./...
 	@cd python && python3 -m pytest tests/ -v

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+
+	"securepdf-engine/pkg/options"
 )
 
 // Policy defines the transformation and security rules for a PDF (V1 schema).
@@ -102,6 +104,35 @@ func Load(path string) (*Policy, error) {
 	}
 
 	return &policy, nil
+}
+
+// LoadWithOptions loads a policy and returns its validation result using engine options.
+// It returns a non-nil ValidationResult even when the policy is invalid.
+func LoadWithOptions(path string, opts *options.EngineOptions) (*Policy, *ValidationResult, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to read policy file: %w", err)
+	}
+
+	var policy Policy
+	if err := json.Unmarshal(data, &policy); err != nil {
+		return nil, nil, fmt.Errorf("failed to parse policy JSON: %w", err)
+	}
+
+	if policy.PolicyVersion == "" {
+		if legacy, ok := parseLegacyPolicy(data); ok {
+			policy = legacy
+		}
+	}
+
+	policy.applyDefaults()
+
+	res := policy.Validate()
+	if opts != nil {
+		res = policy.ValidateWithOptions(opts)
+	}
+
+	return &policy, res, nil
 }
 
 type legacyPolicy struct {

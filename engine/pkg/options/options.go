@@ -9,6 +9,12 @@
 //   - max_input_mb: Maximum input PDF size in megabytes (default: 200)
 //   - max_memory_mb: Maximum memory usage in megabytes (default: 512)
 //
+// I need to figure out a way to ensure that I am not manually setting these values in Python SDK.
+// There should be way or mechanism to ensure that these values are consistent across all SDKs.
+// May be a JSON or MessagePack contract between engine and SDKs.
+// This will help in maintaining consistency and avoid manual updates in multiple SDK
+// > I do not at the moment have plan to support Node.js or PHP SDKs.
+//
 // Usage:
 //
 //	securepdf-engine secure --engine-opt reject_weak_crypto=true --engine-opt timeout_ms=30000
@@ -81,6 +87,10 @@ func Parse(entries []string) (*EngineOptions, error) {
 
 		if key == "" {
 			return nil, fmt.Errorf("invalid engine-opt format %q (empty key)", entry)
+		}
+
+		if value == "" {
+			return nil, fmt.Errorf("invalid engine-opt format %q (empty value)", entry)
 		}
 
 		switch key {
