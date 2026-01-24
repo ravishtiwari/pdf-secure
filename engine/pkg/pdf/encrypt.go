@@ -2,6 +2,7 @@ package pdf
 
 import (
 	"fmt"
+
 	"securepdf-engine/pkg/policy"
 	"securepdf-engine/pkg/receipt"
 
