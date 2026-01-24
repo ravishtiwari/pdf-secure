@@ -3,13 +3,15 @@ import subprocess
 import tempfile
 from contextlib import ExitStack
 from pathlib import Path
-from typing import Optional, Union
+from beartype import beartype
+from beartype.typing import Optional, Union
 from .models import Policy, Receipt
 from .exception import SecurePDFEngineException
 
 PathLike = Union[str, Path]
 
 
+@beartype
 def secure_pdf(
     input_path: PathLike,
     output_path: PathLike,

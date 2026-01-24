@@ -8,4 +8,6 @@ version = "0.0.1"
 description = "Minimal Python SDK for SecurePDF"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "beartype>=0.17.0",
+]

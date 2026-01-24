@@ -2,9 +2,11 @@
 
 import json
 from dataclasses import dataclass, asdict, field
+from beartype import beartype
 from typing import Optional
 
 
+@beartype
 @dataclass
 class EncryptionConfig:
     """Encryption settings for the secured PDF."""
@@ -22,6 +24,7 @@ class EncryptionConfig:
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
 
+@beartype
 @dataclass
 class AckConfig:
     """Custodianship acknowledgment settings."""
@@ -35,6 +38,7 @@ class AckConfig:
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
 
+@beartype
 @dataclass
 class VisibleLabel:
     """Settings for visible watermark/label overlays."""
@@ -49,6 +53,7 @@ class VisibleLabel:
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
 
+@beartype
 @dataclass
 class InvisibleLabel:
     """Settings for invisible metadata markers."""
@@ -61,6 +66,7 @@ class InvisibleLabel:
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
 
+@beartype
 @dataclass
 class LabelsConfig:
     """Visible and invisible label settings."""
@@ -84,6 +90,7 @@ class LabelsConfig:
         )
 
 
+@beartype
 @dataclass
 class ProvenanceConfig:
     """Document provenance tracking settings."""
@@ -97,6 +104,7 @@ class ProvenanceConfig:
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
 
+@beartype
 @dataclass
 class TamperDetectionConfig:
     """Tamper detection settings."""
@@ -109,6 +117,7 @@ class TamperDetectionConfig:
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
 
+@beartype
 @dataclass
 class Policy:
     """Policy defining transformation and security rules for a PDF (V1 schema)."""

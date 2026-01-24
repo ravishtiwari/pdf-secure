@@ -21,3 +21,4 @@ bin/
 do-not-commit/**
 engine/bin/**
 engine/securepdf-engine
+encrypted-*.pdf
