@@ -1,6 +1,6 @@
-module securepdf-engine
+module test-pdfcpu-poc
 
-go 1.24.0
+go 1.25.5
 
 require github.com/pdfcpu/pdfcpu v0.11.1
 
