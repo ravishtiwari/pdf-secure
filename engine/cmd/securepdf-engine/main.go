@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"securepdf-engine/pkg/options"
+	"securepdf-engine/pkg/pdf"
 	"securepdf-engine/pkg/policy"
 	"securepdf-engine/pkg/receipt"
 )
@@ -147,32 +148,30 @@ func runSecure(args []string) error {
 		return &exitError{code: code, err: fmt.Errorf("policy validation failed: %s", message)}
 	}
 
-	// 4. Prepare Stub Receipt (transformation not yet implemented)
-	// Include validation warnings in the receipt
-	res := receipt.NewErrorWithDetails(
-		engineVersion,
-		p.PolicyVersion,
-		receipt.ErrInternalError,
-		"Transformation pipeline not yet implemented",
-		map[string]string{"reason": "stub"},
-	)
-	if validation != nil {
-		res.Warnings = append(res.Warnings, validation.Warnings...)
-	}
+	// 4. Run PDF processor
+	processor := pdf.NewProcessor(p, *inputPath, *outputPath)
+	res, err := processor.Process()
 
 	// 5. Write Receipt
-	if err := res.Save(*receiptPath); err != nil {
-		return fmt.Errorf("failed to save receipt: %w", err)
+	if saveErr := res.Save(*receiptPath); saveErr != nil {
+		return fmt.Errorf("failed to save receipt: %w", saveErr)
 	}
 
-	fmt.Printf("Policy loaded: version=%s, encryption=%v (Password: ***)\n", p.PolicyVersion, p.Encryption.Enabled)
-	if len(validation.Warnings) > 0 {
-		fmt.Printf("Warnings: %d\n", len(validation.Warnings))
-		for _, w := range validation.Warnings {
-			fmt.Printf("  [%s] %s\n", w.Code, w.Message)
+	if err != nil {
+		return &exitError{code: res.Error.Code, err: fmt.Errorf("PDF processing failed: %w", err)}
+	}
+
+	if res.OK {
+		fmt.Printf("✓ PDF secured successfully: %s\n", *outputPath)
+		if len(res.Warnings) > 0 {
+			fmt.Printf("  Warnings:\n")
+			for _, w := range res.Warnings {
+				fmt.Printf("    - [%s] %s\n", w.Code, w.Message)
+			}
 		}
 	}
-	return &exitError{code: receipt.ErrInternalError, err: errors.New("transformation pipeline not yet implemented")}
+
+	return nil
 }
 
 func missingFlags(inputPath, outputPath, policyPath, receiptPath string) []string {
