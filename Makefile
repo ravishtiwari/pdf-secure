@@ -18,4 +18,5 @@ lint:
 
 test:
 	@cd engine && go clean -testcache && go clean  && go test ./...
+	@cd engine && go clean -testcache && go clean  && go test ./cmd/securepdf-engine/
 	@cd python && python3 -m pytest tests/ -v
