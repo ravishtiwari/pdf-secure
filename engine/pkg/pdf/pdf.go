@@ -53,6 +53,12 @@ func (p *Processor) Process() (*receipt.Receipt, error) {
 		if err := p.applyEncryption(rec); err != nil {
 			return receipt.NewError("0.0.1", p.policy.PolicyVersion, receipt.ErrEncryptionFailed, err.Error()), err
 		}
+	} else {
+		// If encryption is disabled, we must copy the input to output
+		// so that subsequent stages (labels, provenance, hashing) operate on the output file
+		if err := p.copyFile(p.inputPath, p.outputPath); err != nil {
+			return receipt.NewError("0.0.1", p.policy.PolicyVersion, receipt.ErrOutputWriteFailed, err.Error()), err
+		}
 	}
 
 	// Stage 3: Visible labels (if enabled)
@@ -133,14 +139,8 @@ func (p *Processor) applyEncryption(rec *receipt.Receipt) error {
 
 // applyVisibleLabels adds visible watermark/footer/header to the PDF.
 func (p *Processor) applyVisibleLabels(rec *receipt.Receipt) error {
-	// For now, if no encryption was applied, we need to ensure the file exists at outputPath
-	// In the future, this will be handled by the transformation pipeline
-	if !p.policy.Encryption.Enabled {
-		if err := p.copyFile(p.inputPath, p.outputPath); err != nil {
-			return err
-		}
-	}
-	return nil
+	// Output file guaranteed to exist by Stage 2 (Encryption or Copy)
+	return nil // Label implementation is separate (Task 7.1)
 }
 
 // applyProvenance embeds provenance information (document_id, copy_id) in the PDF.

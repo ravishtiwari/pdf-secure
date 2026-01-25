@@ -26,7 +26,7 @@ PDF + Policy → [ Go Engine ] → Secured PDF + Structured Receipt
 
 ## ✨ Key Features (V1)
 
-- **Strong Crypto Defaults**: AES-256 encryption with PBKDF2 (high iteration count) password derivation.
+- **Strong Crypto Defaults**: AES-256 encryption (default) with `auto` profile selection. Supports AES-128 (compat) and RC4-128 (legacy) if needed.
 - **Forensic Tamper-Detection**: Original content hashes embedded directly into the secured PDF's metadata.
 - **Provenance Embedding**: Tracking of `document_id`, `copy_id`, timestamps, and policy versions.
 - **Visible & Invisible Labels**: Header/footer overlays and metadata-level watermarking.

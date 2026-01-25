@@ -188,10 +188,9 @@ func TestE2EWeakCryptoWithoutRejection(t *testing.T) {
 	// Since dummy.pdf doesn't exist, Process() fails at validateInput().
 	// However, validation in runSecure should have added it.
 	// Let's relax this for now as we've verified encryption works in TestE2EEncryptionAES256.
-	_ = hasWarning
-	// if !hasWarning {
-	// 	t.Error("expected weak crypto warning to be present")
-	// }
+	if !hasWarning {
+		t.Error("expected weak crypto warning to be present")
+	}
 }
 
 // TestE2EMissingFlags verifies proper error for missing required flags.
@@ -393,5 +392,57 @@ func TestE2ELegacyPolicyFormat(t *testing.T) {
 	// Legacy policy should be converted to 1.0
 	if r.PolicyVersion != "1.0" {
 		t.Errorf("expected policy_version=1.0 for legacy format, got %s", r.PolicyVersion)
+	}
+}
+
+// TestE2EEncryptionDisabled verifies output file is created when encryption is disabled.
+func TestE2EEncryptionDisabled(t *testing.T) {
+	tmpDir := t.TempDir()
+	inputPDF := filepath.Join(tmpDir, "input.pdf")
+	outputPDF := filepath.Join(tmpDir, "output.pdf")
+	policyPath := filepath.Join(tmpDir, "policy.json")
+	receiptPath := filepath.Join(tmpDir, "receipt.json")
+
+	// Create dummy input PDF
+	if err := os.WriteFile(inputPDF, []byte("%PDF-1.4\n..."), 0644); err != nil {
+		t.Fatalf("failed to create input PDF: %v", err)
+	}
+
+	// Create policy with encryption disabled
+	policy := map[string]interface{}{
+		"policy_version": "1.0",
+		"encryption": map[string]interface{}{
+			"enabled": false,
+		},
+	}
+	policyData, _ := json.Marshal(policy)
+	if err := os.WriteFile(policyPath, policyData, 0644); err != nil {
+		t.Fatalf("failed to create policy file: %v", err)
+	}
+
+	args := []string{
+		"--in", inputPDF,
+		"--out", outputPDF,
+		"--policy", policyPath,
+		"--receipt", receiptPath,
+	}
+
+	// Run secure
+	if err := runSecure(args); err != nil {
+		t.Fatalf("runSecure failed: %v", err)
+	}
+
+	// Check output file exists
+	if _, err := os.Stat(outputPDF); os.IsNotExist(err) {
+		t.Error("output PDF was not created when encryption is disabled")
+	}
+
+	// Check receipt
+	r, err := receipt.Load(receiptPath)
+	if err != nil {
+		t.Fatalf("failed to load receipt: %v", err)
+	}
+	if !r.OK {
+		t.Error("receipt indicates failure")
 	}
 }
