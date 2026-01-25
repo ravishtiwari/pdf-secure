@@ -158,6 +158,7 @@ func TestEncryptWithAutoProfile(t *testing.T) {
 	// We can't easily verify the internal pdfcpu config here without inspecting the result details or output file,
 	// but success means "auto" was accepted.
 }
+
 func TestEncryptDisabled(t *testing.T) {
 	// Setup
 	tmpDir := t.TempDir()

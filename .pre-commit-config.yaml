@@ -14,16 +14,19 @@ repos:
         entry: bash -c "cd engine && go fmt ./..."
         language: system
         files: '\.go$'
+        pass_filenames: false
       - id: go-vet
         name: go-vet
-        entry: bash -c "cd engine && go vet ./..."
+        entry: bash -c "cd engine && GO111MODULE=on go vet ./..."
         language: system
         files: '\.go$'
+        pass_filenames: false
       - id: go-unit-tests
         name: go-unit-tests
-        entry: bash -c "cd engine && go clean -testcache && go clean  && go test ./..."
+        entry: bash -c "cd engine && GO111MODULE=on go clean -testcache && go clean  && GO111MODULE=on go test ./..."
         language: system
         files: '\.go$'
+        pass_filenames: false
   - repo: https://github.com/psf/black
     rev: 24.1.1
     hooks:
