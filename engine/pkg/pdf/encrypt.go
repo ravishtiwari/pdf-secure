@@ -2,10 +2,11 @@ package pdf
 
 import (
 	"fmt"
-	"github.com/pdfcpu/pdfcpu/pkg/api"
-	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
 	"securepdf-engine/pkg/policy"
 	"securepdf-engine/pkg/receipt"
+
+	"github.com/pdfcpu/pdfcpu/pkg/api"
+	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
 )
 
 // EncryptionResult holds encryption operation results
@@ -35,10 +36,16 @@ func Encrypt(inputPath, outputPath string, encConfig policy.EncryptionConfig) (*
 	// Encrypt PDF using pdfcpu
 	err := api.EncryptFile(inputPath, outputPath, conf)
 	if err != nil {
+		// report effective profile in details
+		profile := encConfig.CryptoProfile
+		if profile == "" || profile == CryptoProfileAuto {
+			profile = fmt.Sprintf("%s (default)", CryptoProfileStrong)
+		}
+
 		result.Error = &receipt.Error{
 			Code:    receipt.ErrEncryptionFailed,
 			Message: fmt.Sprintf("PDF encryption failed: %v", err),
-			Details: map[string]string{"crypto_profile": encConfig.CryptoProfile},
+			Details: map[string]string{"crypto_profile": profile},
 		}
 		return result, err
 	}
@@ -46,6 +53,14 @@ func Encrypt(inputPath, outputPath string, encConfig policy.EncryptionConfig) (*
 	result.Success = true
 	return result, nil
 }
+
+// EncryptionConfig Constants
+const (
+	CryptoProfileStrong = "strong"
+	CryptoProfileCompat = "compat"
+	CryptoProfileLegacy = "legacy"
+	CryptoProfileAuto   = "auto"
+)
 
 // buildEncryptionConfig maps policy encryption config to pdfcpu config
 func buildEncryptionConfig(encConfig policy.EncryptionConfig) (*model.Configuration, []receipt.Warning) {
@@ -56,15 +71,21 @@ func buildEncryptionConfig(encConfig policy.EncryptionConfig) (*model.Configurat
 	conf.UserPW = encConfig.UserPassword
 	conf.OwnerPW = encConfig.UserPassword // V1: same as user password
 
+	// Determine effective profile (handle auto/empty)
+	profile := encConfig.CryptoProfile
+	if profile == "" || profile == CryptoProfileAuto {
+		profile = CryptoProfileStrong
+	}
+
 	// Map crypto profile to encryption algorithm
-	switch encConfig.CryptoProfile {
-	case "strong":
+	switch profile {
+	case CryptoProfileStrong:
 		conf.EncryptUsingAES = true
 		conf.EncryptKeyLength = 256
-	case "compat":
+	case CryptoProfileCompat:
 		conf.EncryptUsingAES = true
 		conf.EncryptKeyLength = 128
-	case "legacy":
+	case CryptoProfileLegacy:
 		conf.EncryptUsingAES = false
 		conf.EncryptKeyLength = 128
 		warnings = append(warnings, receipt.Warning{
@@ -72,7 +93,7 @@ func buildEncryptionConfig(encConfig policy.EncryptionConfig) (*model.Configurat
 			Message: "Using RC4-128 (legacy). Consider 'strong' or 'compat' for better security.",
 		})
 	default:
-		// Default to strong
+		// Default to strong if unknown (though validation should catch this)
 		conf.EncryptUsingAES = true
 		conf.EncryptKeyLength = 256
 	}

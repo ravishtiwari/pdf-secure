@@ -152,6 +152,11 @@ func runSecure(args []string) error {
 	processor := pdf.NewProcessor(p, *inputPath, *outputPath)
 	res, err := processor.Process()
 
+	// Append validation warnings to result (so they are not lost on success)
+	if validation != nil && len(validation.Warnings) > 0 {
+		res.Warnings = append(res.Warnings, validation.Warnings...)
+	}
+
 	// 5. Write Receipt
 	if saveErr := res.Save(*receiptPath); saveErr != nil {
 		return fmt.Errorf("failed to save receipt: %w", saveErr)

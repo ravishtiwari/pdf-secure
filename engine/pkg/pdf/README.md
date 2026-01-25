@@ -7,7 +7,7 @@ This package provides the core PDF transformation engine for SecurePDF.
 The `Processor` applies transformations in a strict pipeline:
 
 ```
-1. Input Validation → 2. Encryption → 3. Labels → 4. Provenance → 5. Tamper Detection → 6. Output Hash
+1. Input Validation → 2. Encryption (or Copy) → 3. Labels → 4. Provenance → 5. Tamper Detection → 6. Output Hash
 ```
 
 Each stage:
@@ -15,6 +15,8 @@ Each stage:
 - Records errors/warnings with standardized codes
 - Stops on fatal errors (returns non-nil error)
 - Continues on warnings (records in receipt, returns nil)
+
+**Note:** If encryption is disabled, the input file is copied to the output path in Stage 2 to ensure subsequent stages have a valid file to operate on.
 
 ## Modules
 
@@ -46,7 +48,7 @@ if err != nil {
 }
 
 // Check receipt
-if !receipt.Ok {
+if !receipt.OK {
     log.Printf("Processing completed with errors: %d", len(receipt.Errors))
 }
 ```
@@ -66,15 +68,26 @@ go test ./pkg/pdf
 go test ./cmd/securepdf-engine -tags=e2e
 ```
 
+
+## Crypto Profiles
+
+The engine supports the following encryption profiles:
+- **strong** (default): AES-256 encryption (recommended).
+- **compat**: AES-128 encryption (for older viewers).
+- **legacy**: RC4-128 encryption (deprecated, emits warning).
+- **auto**: Selects the best available profile (defaults to **strong**).
+
 ## Error Handling
 
 All errors use standardized codes from `pkg/receipt/codes.go`:
 
-- `E001` - Input file invalid/unreadable
-- `E002` - Encryption failed
-- `E003` - Labeling failed
-- `E004` - Provenance embedding failed
-- `E005` - Tamper detection failed
-- `E006` - Hashing failed
+- `E001` - Policy invalid
+- `E002` - Input file invalid/unreadable
+- `E003` - Input PDF unsupported
+- `E004` - Encryption failed
+- `E005` - Labeling failed
+- `E006` - Provenance embedding failed
+- `E007` - Tamper detection failed
+- `E008` - Output write/hashing failed
 
-Warnings use `W0xx` codes for non-fatal issues.
+Warnings use `W0xx` codes for non-fatal issues (e.g., `W001` for weak crypto).

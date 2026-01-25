@@ -130,6 +130,35 @@ func TestEncryptWithPermissions(t *testing.T) {
 	}
 }
 
+func TestEncryptWithAutoProfile(t *testing.T) {
+	// Setup
+	tmpDir := t.TempDir()
+	inputPath := "../../test-pdfs/sample-input.pdf"
+	outputPath := filepath.Join(tmpDir, "output-auto.pdf")
+
+	// Config
+	encConfig := policy.EncryptionConfig{
+		Enabled:       true,
+		UserPassword:  "password",
+		CryptoProfile: "auto",
+	}
+
+	// Execute
+	result, err := Encrypt(inputPath, outputPath, encConfig)
+	if err != nil {
+		t.Fatalf("Encrypt failed: %v", err)
+	}
+
+	// Verify
+	if !result.Success {
+		t.Error("Expected Success to be true")
+	}
+
+	// Should default to strong (AES-256)
+	// We can't easily verify the internal pdfcpu config here without inspecting the result details or output file,
+	// but success means "auto" was accepted.
+}
+
 func TestEncryptDisabled(t *testing.T) {
 	// Setup
 	tmpDir := t.TempDir()
