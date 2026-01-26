@@ -93,7 +93,7 @@ func buildWatermark(label *policy.VisibleLabel) (*model.Watermark, error) {
 		"scale:1 abs",       // Absolute scaling
 	}
 
-	// Position
+	// Position - in future may be configurable
 	switch label.Placement {
 	case "footer":
 		descParts = append(descParts, "pos:bc", "off:0 10") // Bottom Center, offset 10pts up

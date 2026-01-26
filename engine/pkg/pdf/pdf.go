@@ -34,11 +34,12 @@ func NewProcessor(pol *policy.Policy, inputPath, outputPath string) *Processor {
 //
 // Processing pipeline stages:
 //  1. Input validation - verify PDF is valid and readable
-//  2. Encryption - apply password and permissions (if enabled)
+//  2. Input Copy - prepare working file
 //  3. Visible labels - add watermark/footer/header (if enabled)
 //  4. Provenance - embed document_id and copy_id (if enabled)
 //  5. Tamper detection - embed content hash (if enabled)
-//  6. Output hashing - compute final file hash for receipt
+//  6. Encryption - apply password and permissions (if enabled)
+//  7. Output hashing - compute final file hash for receipt
 func (p *Processor) Process() (*receipt.Receipt, error) {
 	// Create success receipt initially
 	rec := receipt.NewSuccess("0.0.1", p.policy.PolicyVersion)
@@ -48,41 +49,50 @@ func (p *Processor) Process() (*receipt.Receipt, error) {
 		return receipt.NewError("0.0.1", p.policy.PolicyVersion, receipt.ErrInputPDFInvalid, err.Error()), err
 	}
 
-	// Stage 2: Encryption
-	if p.policy.Encryption.Enabled {
-		if err := p.applyEncryption(rec); err != nil {
-			return receipt.NewError("0.0.1", p.policy.PolicyVersion, receipt.ErrEncryptionFailed, err.Error()), err
-		}
-	} else {
-		// If encryption is disabled, we must copy the input to output
-		// so that subsequent stages (labels, provenance, hashing) operate on the output file
-		if err := p.copyFile(p.inputPath, p.outputPath); err != nil {
-			return receipt.NewError("0.0.1", p.policy.PolicyVersion, receipt.ErrOutputWriteFailed, err.Error()), err
-		}
+	// Prepare working file (intermediate)
+	// We work on a temporary copy to avoid modifying input and to handle encryption last
+	// We use .tmp suffix on the output path to ensure it's on the same filesystem
+	workingPath := p.outputPath + ".tmp"
+	if err := p.copyFile(p.inputPath, workingPath); err != nil {
+		return receipt.NewError("0.0.1", p.policy.PolicyVersion, receipt.ErrInternalError, fmt.Sprintf("failed to create working file: %v", err)), err
 	}
+	defer os.Remove(workingPath) // Clean up temp file
 
 	// Stage 3: Visible labels (if enabled)
 	if p.policy.Labels != nil && p.policy.Labels.Mode == "visible" && p.policy.Labels.Visible != nil {
-		if err := p.applyVisibleLabels(rec); err != nil {
+		if err := p.applyVisibleLabels(rec, workingPath); err != nil {
 			return receipt.NewError("0.0.1", p.policy.PolicyVersion, receipt.ErrLabelFailed, err.Error()), err
 		}
 	}
 
 	// Stage 4: Provenance (if enabled)
 	if p.policy.Provenance != nil && p.policy.Provenance.Enabled {
-		if err := p.applyProvenance(rec); err != nil {
+		if err := p.applyProvenance(rec, workingPath); err != nil {
 			return receipt.NewError("0.0.1", p.policy.PolicyVersion, receipt.ErrProvenanceFailed, err.Error()), err
 		}
 	}
 
 	// Stage 5: Tamper detection (if enabled)
 	if p.policy.TamperDetection != nil && p.policy.TamperDetection.Enabled {
-		if err := p.applyTamperDetection(rec); err != nil {
+		if err := p.applyTamperDetection(rec, workingPath); err != nil {
 			return receipt.NewError("0.0.1", p.policy.PolicyVersion, receipt.ErrTamperHashFailed, err.Error()), err
 		}
 	}
 
-	// Stage 6: Output hashing
+	// Stage 6: Encryption (or Final Copy)
+	if p.policy.Encryption.Enabled {
+		// Encrypt working file to output file
+		if err := p.applyEncryption(rec, workingPath); err != nil {
+			return receipt.NewError("0.0.1", p.policy.PolicyVersion, receipt.ErrEncryptionFailed, err.Error()), err
+		}
+	} else {
+		// If encryption is disabled, just move/copy working file to output
+		if err := p.copyFile(workingPath, p.outputPath); err != nil {
+			return receipt.NewError("0.0.1", p.policy.PolicyVersion, receipt.ErrOutputWriteFailed, err.Error()), err
+		}
+	}
+
+	// Stage 7: Output hashing
 	if err := p.computeOutputHash(rec); err != nil {
 		return receipt.NewError("0.0.1", p.policy.PolicyVersion, receipt.ErrOutputWriteFailed, err.Error()), err
 	}
@@ -123,8 +133,9 @@ func (p *Processor) validateInput(rec *receipt.Receipt) error {
 }
 
 // applyEncryption encrypts the PDF according to the policy.
-func (p *Processor) applyEncryption(rec *receipt.Receipt) error {
-	encResult, err := Encrypt(p.inputPath, p.outputPath, p.policy.Encryption)
+// inputPath here is the source file to encrypt (which is our working file)
+func (p *Processor) applyEncryption(rec *receipt.Receipt, inputPath string) error {
+	encResult, err := Encrypt(inputPath, p.outputPath, p.policy.Encryption)
 	if err != nil {
 		return err
 	}
@@ -138,18 +149,43 @@ func (p *Processor) applyEncryption(rec *receipt.Receipt) error {
 }
 
 // applyVisibleLabels adds visible watermark/footer/header to the PDF.
-func (p *Processor) applyVisibleLabels(rec *receipt.Receipt) error {
-	// Output file guaranteed to exist by Stage 2 (Encryption or Copy)
-	return nil // Label implementation is separate (Task 7.1)
+func (p *Processor) applyVisibleLabels(rec *receipt.Receipt, workingPath string) error {
+	// Delegate to labels.go
+	res, err := ApplyVisibleLabel(workingPath, p.policy.Labels.Visible)
+	if err != nil {
+		return err // Errors here should probably be fatal for the operation if we can't label
+	}
+
+	// Record warnings
+	if len(res.Warnings) > 0 {
+		rec.Warnings = append(rec.Warnings, res.Warnings...)
+	}
+
+	return nil
 }
 
 // applyProvenance embeds provenance information (document_id, copy_id) in the PDF.
-func (p *Processor) applyProvenance(rec *receipt.Receipt) error {
+func (p *Processor) applyProvenance(rec *receipt.Receipt, workingPath string) error {
+	// Delegate to provenance.go
+	res, err := ApplyProvenance(workingPath, p.policy.Provenance)
+	if err != nil {
+		return err
+	}
+
+	// Update receipt with generated IDs
+	rec.DocumentID = res.DocumentID
+	rec.CopyID = res.CopyID
+
+	// Record warnings
+	if len(res.Warnings) > 0 {
+		rec.Warnings = append(rec.Warnings, res.Warnings...)
+	}
+
 	return nil
 }
 
 // applyTamperDetection embeds tamper detection information in the PDF.
-func (p *Processor) applyTamperDetection(rec *receipt.Receipt) error {
+func (p *Processor) applyTamperDetection(rec *receipt.Receipt, workingPath string) error {
 	return nil
 }
 

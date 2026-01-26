@@ -145,6 +145,11 @@ func GenerateCopyID() string {
 	return "copy-" + generateUUID()
 }
 
+// GetTimestamp returns the current UTC timestamp in RFC3339 format.
+func GetTimestamp() string {
+	return time.Now().UTC().Format(time.RFC3339)
+}
+
 // generateUUID generates a random UUID v4 string using stdlib crypto/rand.
 func generateUUID() string {
 	b := make([]byte, 16)
