@@ -4,7 +4,6 @@
 package pdf
 
 import (
-	"crypto/sha256"
 	"fmt"
 	"io"
 	"os"
@@ -34,12 +33,13 @@ func NewProcessor(pol *policy.Policy, inputPath, outputPath string) *Processor {
 //
 // Processing pipeline stages:
 //  1. Input validation - verify PDF is valid and readable
-//  2. Input Copy - prepare working file
-//  3. Visible labels - add watermark/footer/header (if enabled)
-//  4. Provenance - embed document_id and copy_id (if enabled)
-//  5. Tamper detection - embed content hash (if enabled)
-//  6. Encryption - apply password and permissions (if enabled)
-//  7. Output hashing - compute final file hash for receipt
+//  2. Input hashing - compute input file hash for receipt
+//  3. Input Copy - prepare working file
+//  4. Visible labels - add watermark/footer/header (if enabled)
+//  5. Provenance - embed document_id and copy_id (if enabled)
+//  6. Tamper detection - embed content hash (if enabled)
+//  7. Encryption - apply password and permissions (if enabled)
+//  8. Output hashing - compute final file hash for receipt
 func (p *Processor) Process() (*receipt.Receipt, error) {
 	// Create success receipt initially
 	rec := receipt.NewSuccess("0.0.1", p.policy.PolicyVersion)
@@ -47,6 +47,11 @@ func (p *Processor) Process() (*receipt.Receipt, error) {
 	// Stage 1: Input validation
 	if err := p.validateInput(rec); err != nil {
 		return receipt.NewError("0.0.1", p.policy.PolicyVersion, receipt.ErrInputPDFInvalid, err.Error()), err
+	}
+
+	// Stage 2: Input hashing
+	if err := p.computeInputHash(rec); err != nil {
+		return receipt.NewError("0.0.1", p.policy.PolicyVersion, receipt.ErrInputReadFailed, err.Error()), err
 	}
 
 	// Prepare working file (intermediate)
@@ -186,23 +191,39 @@ func (p *Processor) applyProvenance(rec *receipt.Receipt, workingPath string) er
 
 // applyTamperDetection embeds tamper detection information in the PDF.
 func (p *Processor) applyTamperDetection(rec *receipt.Receipt, workingPath string) error {
+	res, err := ApplyTamperDetection(workingPath, p.policy.TamperDetection)
+	if err != nil {
+		return err
+	}
+
+	if res.ContentHash != "" {
+		rec.SetContentHash(res.ContentHash)
+	}
+
+	if len(res.Warnings) > 0 {
+		rec.Warnings = append(rec.Warnings, res.Warnings...)
+	}
+
+	return nil
+}
+
+// computeInputHash computes the SHA-256 hash of the input file.
+func (p *Processor) computeInputHash(rec *receipt.Receipt) error {
+	res, err := HashFile(p.inputPath)
+	if err != nil {
+		return fmt.Errorf("failed to compute input hash: %w", err)
+	}
+	rec.InputSHA256 = res.SHA256
 	return nil
 }
 
 // computeOutputHash computes the SHA-256 hash of the output file.
 func (p *Processor) computeOutputHash(rec *receipt.Receipt) error {
-	f, err := os.Open(p.outputPath)
+	res, err := HashFile(p.outputPath)
 	if err != nil {
-		return fmt.Errorf("failed to open output file for hashing: %w", err)
-	}
-	defer f.Close()
-
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
 		return fmt.Errorf("failed to compute output hash: %w", err)
 	}
-
-	rec.OutputSHA256 = fmt.Sprintf("%x", h.Sum(nil))
+	rec.OutputSHA256 = res.SHA256
 	return nil
 }
 

@@ -85,22 +85,28 @@ func buildWatermark(label *policy.VisibleLabel) (*model.Watermark, error) {
 	// Format: "font:Helvetica, points:10, color:0.5 0.5 0.5, op:0.6, pos:bc, off:0 10"
 
 	// Base configuration
+	fontSize := 12
+	// offset := 28
+	rotation := 160
 	descParts := []string{
 		"font:Helvetica",
-		"points:10",
-		"color:0.5 0.5 0.5", // Gray
-		"op:0.6",            // Opacity
-		"scale:1 abs",       // Absolute scaling
+		fmt.Sprintf("points:%d", fontSize),
+		"color:0.5 0.5 0.5",             // Gray
+		"op:0.75",                       // Opacity
+		"scale:1 abs",                   // Absolute scaling
+		fmt.Sprintf("rot:%d", rotation), // Diagonal watermark
+		"aligntext:c",                   // Explicit horizontal centering
+		"margins:0",                     // Avoid requiring background color
 	}
 
 	// Position - in future may be configurable
 	switch label.Placement {
 	case "footer":
-		descParts = append(descParts, "pos:bc", "off:0 10") // Bottom Center, offset 10pts up
+		descParts = append(descParts, "pos:c", "off:0 0") // Center for diagonal
 	case "header":
-		descParts = append(descParts, "pos:tc", "off:0 -10") // Top Center, offset 10pts down
+		descParts = append(descParts, "pos:c", "off:0 0")
 	default:
-		descParts = append(descParts, "pos:bc", "off:0 10")
+		descParts = append(descParts, "pos:c", "off:0 0")
 	}
 
 	desc := strings.Join(descParts, ", ")
