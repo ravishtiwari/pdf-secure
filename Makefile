@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: help fmt lint test
+.PHONY: help fmt lint test engine-clean-build
 
 help:
 	@echo "Targets:"
@@ -19,3 +19,6 @@ lint:
 test:
 	@cd engine && go clean -testcache && go clean  && go test ./...
 	@cd python && python3 -m pytest tests/ -v
+
+engine-clean-build:
+	@cd engine && go clean -cache -testcache && go build -o ../bin/securepdf-engine ./cmd/securepdf-engine

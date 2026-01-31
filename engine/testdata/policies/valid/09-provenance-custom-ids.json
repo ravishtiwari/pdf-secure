@@ -1,0 +1,11 @@
+{
+  "policy_version": "1.0",
+  "encryption": {
+    "enabled": false
+  },
+  "provenance": {
+    "enabled": true,
+    "document_id": "doc-demo-001",
+    "copy_id": "copy-demo-001"
+  }
+}
