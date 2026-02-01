@@ -1,7 +1,9 @@
-# PROVANCE
+# PROVANCE (intentional spelling)
 
 This document covers provenance support in SecurePDF and how to test it using the
-engine and Python SDK. (The file name matches the requested spelling.)
+engine and Python SDK. Note: the file name and title use the spelling "PROVANCE"
+to match an externally requested spelling; the feature itself is called
+"provenance" elsewhere in the codebase and documentation.
 
 ## Provenance overview
 

@@ -7,7 +7,7 @@ This package provides the core PDF transformation engine for SecurePDF.
 The `Processor` applies transformations in a strict pipeline:
 
 ```
-1. Input Validation → 2. Encryption (or Copy) → 3. Labels → 4. Provenance → 5. Tamper Detection → 6. Output Hash
+1. Input Validation → 2. Input Hashing → 3. Input Copy → 4. Labels → 5. Provenance → 6. Tamper Detection → 7. Encryption (or Copy) → 8. Output Hashing
 ```
 
 Each stage:
@@ -16,7 +16,7 @@ Each stage:
 - Stops on fatal errors (returns non-nil error)
 - Continues on warnings (records in receipt, returns nil)
 
-**Note:** If encryption is disabled, the input file is copied to the output path in Stage 2 to ensure subsequent stages have a valid file to operate on.
+**Note:** A working copy is created early in the pipeline; if encryption is disabled, that working file is copied to the output path in Stage 7.
 
 ## Modules
 
