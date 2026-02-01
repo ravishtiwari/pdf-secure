@@ -68,7 +68,6 @@ go test ./pkg/pdf
 go test ./cmd/securepdf-engine -tags=e2e
 ```
 
-
 ## Crypto Profiles
 
 The engine supports the following encryption profiles:
@@ -76,7 +75,6 @@ The engine supports the following encryption profiles:
 - **compat**: AES-128 encryption (for older viewers).
 - **legacy**: RC4-128 encryption (deprecated, emits warning).
 - **auto**: Selects the best available profile (defaults to **strong**).
-
 ## Error Handling
 
 All errors use standardized codes from `pkg/receipt/codes.go`:
