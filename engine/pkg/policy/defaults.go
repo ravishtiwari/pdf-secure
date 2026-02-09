@@ -56,6 +56,13 @@ func defaultTamperHashAlg(tamper *TamperDetectionConfig) string {
 	return tamper.HashAlg
 }
 
+func defaultTamperHashProfile(tamper *TamperDetectionConfig) string {
+	if tamper != nil && tamper.HashProfile == "" {
+		return "objects_only"
+	}
+	return tamper.HashProfile
+}
+
 func defaultAckText(ack *AckConfig) string {
 	if ack != nil && ack.Text == "" {
 		return "OSS_DEFAULT"

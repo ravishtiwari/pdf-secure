@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"securepdf-engine/pkg/consts"
 	"securepdf-engine/pkg/options"
 	"securepdf-engine/pkg/pdf"
 	"securepdf-engine/pkg/policy"
@@ -55,8 +56,6 @@ func main() {
 	}
 }
 
-const engineVersion = "0.0.1"
-
 type exitError struct {
 	code string
 	err  error
@@ -103,7 +102,7 @@ func runSecure(args []string) error {
 	opts, err := options.Parse(engineOpts)
 	if err != nil {
 		res := receipt.NewErrorWithDetails(
-			engineVersion,
+			consts.EngineVersion,
 			"1.0",
 			receipt.ErrInternalError,
 			"invalid engine option",
@@ -117,7 +116,7 @@ func runSecure(args []string) error {
 	p, validation, err := policy.LoadWithOptions(*policyPath, opts)
 	if err != nil {
 		res := receipt.NewErrorWithDetails(
-			engineVersion,
+			consts.EngineVersion,
 			"1.0",
 			receipt.ErrPolicyInvalid,
 			"policy parse error",
@@ -137,7 +136,7 @@ func runSecure(args []string) error {
 			details = validation.Error.Details
 		}
 		res := receipt.NewErrorWithDetails(
-			engineVersion,
+			consts.EngineVersion,
 			p.PolicyVersion,
 			code,
 			message,
@@ -163,7 +162,11 @@ func runSecure(args []string) error {
 	}
 
 	if err != nil {
-		return &exitError{code: res.Error.Code, err: fmt.Errorf("PDF processing failed: %w", err)}
+		code := receipt.ErrInternalError
+		if res.Error != nil {
+			code = res.Error.Code
+		}
+		return &exitError{code: code, err: fmt.Errorf("PDF processing failed: %w", err)}
 	}
 
 	if res.OK {
