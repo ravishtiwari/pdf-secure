@@ -1,9 +1,15 @@
 """Policy models for SecurePDF V1 schema."""
 
+from enum import Enum
 import json
 from dataclasses import dataclass, asdict, field
 from beartype import beartype
 from typing import Optional
+
+
+class LabelsConfig(str, Enum):
+    PLACEMENT_HEADER: str = "header"
+    PLACEMENT_FOOTER: str = "footer"
 
 
 @beartype
@@ -14,6 +20,9 @@ class EncryptionConfig:
     enabled: bool = True
     mode: str = "password"  # "password" only in V1
     user_password: str = ""
+    owner_password: str = (
+        ""  # If empty, engine generates a random 8-char alphanumeric password
+    )
     allow_print: bool = False
     allow_copy: bool = False
     allow_modify: bool = False

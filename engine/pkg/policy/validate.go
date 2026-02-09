@@ -234,6 +234,15 @@ func (policy *Policy) validateTamperDetection() *receipt.Error {
 	if hashAlg != "sha256" {
 		return validationError("tamper_detection.hash_alg", "only sha256 is supported in V1")
 	}
+
+	hashProfile := defaultTamperHashProfile(policy.TamperDetection)
+	switch hashProfile {
+	case "objects_only", "content_streams", "external":
+		// ok
+	default:
+		return validationError("tamper_detection.hash_profile", "invalid hash_profile")
+	}
+
 	return nil
 }
 

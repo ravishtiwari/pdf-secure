@@ -23,6 +23,7 @@ type EncryptionConfig struct {
 	Enabled       bool   `json:"enabled"`
 	Mode          string `json:"mode"` // "password" only in V1
 	UserPassword  string `json:"user_password"`
+	OwnerPassword string `json:"owner_password,omitempty"` // If empty, a random 8-char alphanumeric password is generated
 	AllowPrint    bool   `json:"allow_print"`
 	AllowCopy     bool   `json:"allow_copy"`
 	AllowModify   bool   `json:"allow_modify"`
@@ -66,8 +67,9 @@ type ProvenanceConfig struct {
 
 // TamperDetectionConfig defines tamper detection settings.
 type TamperDetectionConfig struct {
-	Enabled bool   `json:"enabled"`
-	HashAlg string `json:"hash_alg"` // "sha256" only in V1
+	Enabled     bool   `json:"enabled"`
+	HashAlg     string `json:"hash_alg"`     // "sha256" only in V1
+	HashProfile string `json:"hash_profile"` // "objects_only" (default)|"content_streams"|"external"
 }
 
 // Load reads a policy from a JSON file.
@@ -127,9 +129,11 @@ func LoadWithOptions(path string, opts *options.EngineOptions) (*Policy, *Valida
 
 	policy.applyDefaults()
 
-	res := policy.Validate()
+	var res *ValidationResult
 	if opts != nil {
 		res = policy.ValidateWithOptions(opts)
+	} else {
+		res = policy.Validate()
 	}
 
 	return &policy, res, nil
@@ -204,8 +208,13 @@ func (policy *Policy) applyDefaults() {
 	}
 
 	// Default tamper detection hash algorithm
-	if policy.TamperDetection != nil && policy.TamperDetection.Enabled && policy.TamperDetection.HashAlg == "" {
-		policy.TamperDetection.HashAlg = defaultTamperHashAlg(policy.TamperDetection)
+	if policy.TamperDetection != nil && policy.TamperDetection.Enabled {
+		if policy.TamperDetection.HashAlg == "" {
+			policy.TamperDetection.HashAlg = defaultTamperHashAlg(policy.TamperDetection)
+		}
+		if policy.TamperDetection.HashProfile == "" {
+			policy.TamperDetection.HashProfile = defaultTamperHashProfile(policy.TamperDetection)
+		}
 	}
 
 	// Default labels mode
