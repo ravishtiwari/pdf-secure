@@ -1,0 +1,14 @@
+#!/bin/bash
+# Wrapper script to run test.py with the correct Python environment
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+VENV_PYTHON="$REPO_ROOT/.venv/bin/python" #Yes, hacky, but, if someone wants, they can optimise this
+
+if [ ! -f "$VENV_PYTHON" ]; then
+    echo "Error: Virtual environment not found at $REPO_ROOT/.venv"
+    echo "Please create it with: python -m venv .venv && source .venv/bin/activate && pip install -e python/"
+    exit 1
+fi
+
+exec "$VENV_PYTHON" "$SCRIPT_DIR/test.py" "$@"
