@@ -77,6 +77,15 @@ func TestE2EProcessPipelineFullFeatures(t *testing.T) {
 	if _, err := os.Stat(outputPath); err != nil {
 		t.Fatalf("Expected output file to exist: %v", err)
 	}
+
+	// Verify tamper detection
+	valid, err := VerifyTamperDetection(outputPath)
+	if err != nil {
+		t.Fatalf("VerifyTamperDetection failed: %v", err)
+	}
+	if !valid {
+		t.Error("VerifyTamperDetection returned false, expected true")
+	}
 }
 
 // TestE2EMinimalPipeline tests pipeline with only encryption disabled (passthrough)
@@ -288,5 +297,14 @@ func TestE2ETamperDetectionOnly(t *testing.T) {
 	// Content hash should be a valid SHA-256 (64 hex chars)
 	if len(rec.InputContentHash) != 64 {
 		t.Errorf("Expected 64-char SHA-256 hash, got %d chars", len(rec.InputContentHash))
+	}
+
+	// Verify the tamper detection
+	valid, err := VerifyTamperDetection(outputPath)
+	if err != nil {
+		t.Fatalf("VerifyTamperDetection failed: %v", err)
+	}
+	if !valid {
+		t.Error("VerifyTamperDetection returned false, expected true")
 	}
 }

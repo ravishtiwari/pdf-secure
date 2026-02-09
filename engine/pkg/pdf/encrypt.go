@@ -1,7 +1,9 @@
 package pdf
 
 import (
+	"crypto/rand"
 	"fmt"
+	"math/big"
 
 	"securepdf-engine/pkg/policy"
 	"securepdf-engine/pkg/receipt"
@@ -9,6 +11,22 @@ import (
 	"github.com/pdfcpu/pdfcpu/pkg/api"
 	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
 )
+
+// alphanumericChars is the character set for random owner password generation.
+const alphanumericChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+// generateRandomPassword generates a cryptographically random alphanumeric password of the given length.
+func generateRandomPassword(length int) (string, error) {
+	b := make([]byte, length)
+	for i := range b {
+		idx, err := rand.Int(rand.Reader, big.NewInt(int64(len(alphanumericChars))))
+		if err != nil {
+			return "", fmt.Errorf("failed to generate random password: %w", err)
+		}
+		b[i] = alphanumericChars[idx.Int64()]
+	}
+	return string(b), nil
+}
 
 // EncryptionResult holds encryption operation results
 type EncryptionResult struct {
@@ -31,11 +49,18 @@ func Encrypt(inputPath, outputPath string, encConfig policy.EncryptionConfig) (*
 	}
 
 	// Map crypto profile to pdfcpu encryption config
-	conf, warnings := buildEncryptionConfig(encConfig)
+	conf, warnings, err := buildEncryptionConfig(encConfig)
+	if err != nil {
+		result.Error = &receipt.Error{
+			Code:    receipt.ErrEncryptionFailed,
+			Message: fmt.Sprintf("Failed to build encryption config: %v", err),
+		}
+		return result, err
+	}
 	result.Warnings = append(result.Warnings, warnings...)
 
 	// Encrypt PDF using pdfcpu
-	err := api.EncryptFile(inputPath, outputPath, conf)
+	err = api.EncryptFile(inputPath, outputPath, conf)
 	if err != nil {
 		// report effective profile in details
 		profile := encConfig.CryptoProfile
@@ -64,13 +89,23 @@ const (
 )
 
 // buildEncryptionConfig maps policy encryption config to pdfcpu config
-func buildEncryptionConfig(encConfig policy.EncryptionConfig) (*model.Configuration, []receipt.Warning) {
+func buildEncryptionConfig(encConfig policy.EncryptionConfig) (*model.Configuration, []receipt.Warning, error) {
 	conf := model.NewDefaultConfiguration()
 	warnings := []receipt.Warning{}
 
 	// Set user password
 	conf.UserPW = encConfig.UserPassword
-	conf.OwnerPW = encConfig.UserPassword // V1: same as user password
+
+	// Set owner password: use provided value, or generate a random 8-char alphanumeric password
+	if encConfig.OwnerPassword != "" {
+		conf.OwnerPW = encConfig.OwnerPassword
+	} else {
+		randomPW, err := generateRandomPassword(8)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to generate owner password: %w", err)
+		}
+		conf.OwnerPW = randomPW
+	}
 
 	// Determine effective profile (handle auto/empty)
 	profile := encConfig.CryptoProfile
@@ -102,7 +137,7 @@ func buildEncryptionConfig(encConfig policy.EncryptionConfig) (*model.Configurat
 	// Map permissions
 	conf.Permissions = buildPermissions(encConfig)
 
-	return conf, warnings
+	return conf, warnings, nil
 }
 
 // buildPermissions maps policy encryption config to pdfcpu permissions
@@ -110,13 +145,13 @@ func buildPermissions(encConfig policy.EncryptionConfig) model.PermissionFlags {
 	perms := model.PermissionsNone
 
 	if encConfig.AllowPrint {
-		perms += model.PermissionPrintRev2 + model.PermissionPrintRev3
+		perms |= model.PermissionPrintRev2 | model.PermissionPrintRev3
 	}
 	if encConfig.AllowCopy {
-		perms += model.PermissionExtract + model.PermissionExtractRev3
+		perms |= model.PermissionExtract | model.PermissionExtractRev3
 	}
 	if encConfig.AllowModify {
-		perms += model.PermissionModify + model.PermissionModAnnFillForm + model.PermissionAssembleRev3
+		perms |= model.PermissionModify | model.PermissionModAnnFillForm | model.PermissionAssembleRev3
 	}
 
 	return perms

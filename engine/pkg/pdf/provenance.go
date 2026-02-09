@@ -8,6 +8,7 @@ import (
 	"securepdf-engine/pkg/receipt"
 
 	"github.com/pdfcpu/pdfcpu/pkg/api"
+	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
 )
 
 // ProvenanceResult holds provenance operation results
@@ -81,19 +82,13 @@ func getOrGenerateCopyID(providedID string) string {
 // addMetadata adds custom metadata fields to PDF Info dictionary
 func addMetadata(pdfPath string, metadata map[string]string) error {
 	// Use api.AddPropertiesFile to add metadata fields
-	// Note: We leave conf as nil to use default configuration
-	// We pass empty string for outPath to overwrite inPath (or so we assume,
-	// but AddPropertiesFile usually takes (inFile, outFile, properties, conf).
-	// If outFile is empty, does it overwrite?
-	// Let's check typical pdfcpu behavior or use tmp file strategy if needed.
-	// Actually, for safety, let's use a temporary output file and move it back?
-	// Or trust pdfcpu handles empty output as overwrite or error.
-	// Checking pdfcpu docs/code indirectly via common patterns: usually requires explicit output.
-	// Let's safe bet: overwrite input file by passing it as output file too?
-	// api.AddPropertiesFile(inFile, outFile, ...)
-	// If inFile == outFile, it should work for pdfcpu.
+	// We MUST disable ObjectStream writing to ensure the PDF structure remains
+	// stable (objects not packed/renumbered) for tamper detection hashing.
+	conf := model.NewDefaultConfiguration()
+	conf.WriteObjectStream = false
+	conf.WriteXRefStream = false // Also disable XRef streams for maximum compatibility/stability
 
-	err := api.AddPropertiesFile(pdfPath, pdfPath, metadata, nil)
+	err := api.AddPropertiesFile(pdfPath, pdfPath, metadata, conf)
 	if err != nil {
 		return fmt.Errorf("failed to add metadata properties: %w", err)
 	}
