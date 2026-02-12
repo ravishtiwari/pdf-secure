@@ -94,6 +94,10 @@ const (
 	// ErrInputReadFailed indicates the input file could not be read.
 	ErrInputReadFailed = "E011"
 
+	// ErrWeakCryptoRejected indicates a weak crypto profile was requested
+	// but rejected due to engine options (reject_weak_crypto=true).
+	ErrWeakCryptoRejected = "E012"
+
 	// ErrInternalError indicates an unexpected internal error.
 	ErrInternalError = "E099"
 )
@@ -111,6 +115,7 @@ var errorMessages = map[string]string{
 	ErrRuntimeTimeout:      "Transformation exceeded time limit",
 	ErrRuntimeMemoryLimit:  "Transformation exceeded memory limit",
 	ErrInputReadFailed:     "Input file could not be read",
+	ErrWeakCryptoRejected:  "Weak cryptography profile rejected by engine configuration",
 	ErrInternalError:       "Unexpected internal error",
 }
 
@@ -141,6 +146,7 @@ var errorToExitCode = map[string]int{
 	ErrRuntimeTimeout:      ExitRuntimeLimit,
 	ErrRuntimeMemoryLimit:  ExitRuntimeLimit,
 	ErrInputReadFailed:     ExitInputInvalid,
+	ErrWeakCryptoRejected:  ExitTransformFailed,
 	ErrInternalError:       ExitTransformFailed,
 }
 

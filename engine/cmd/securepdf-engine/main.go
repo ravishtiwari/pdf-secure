@@ -148,7 +148,7 @@ func runSecure(args []string) error {
 	}
 
 	// 4. Run PDF processor
-	processor := pdf.NewProcessor(p, *inputPath, *outputPath)
+	processor := pdf.NewProcessor(p, *inputPath, *outputPath, opts)
 	res, err := processor.Process()
 
 	// Append validation warnings to result (so they are not lost on success)

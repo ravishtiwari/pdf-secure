@@ -15,6 +15,15 @@ import (
 // alphanumericChars is the character set for random owner password generation.
 const alphanumericChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
+// WeakCryptoError is a typed error returned when weak cryptography is rejected.
+type WeakCryptoError struct {
+	Profile string
+}
+
+func (e *WeakCryptoError) Error() string {
+	return fmt.Sprintf("weak crypto profile '%s' rejected", e.Profile)
+}
+
 // generateRandomPassword generates a cryptographically random alphanumeric password of the given length.
 func generateRandomPassword(length int) (string, error) {
 	b := make([]byte, length)
@@ -35,8 +44,11 @@ type EncryptionResult struct {
 	Error    *receipt.Error
 }
 
-// Encrypt applies password-based encryption to a PDF
-func Encrypt(inputPath, outputPath string, encConfig policy.EncryptionConfig) (*EncryptionResult, error) {
+// Encrypt applies password-based encryption to a PDF.
+// It supports different security profiles ("strong", "compat", "legacy") and granular permissions.
+// If the profile is "legacy" (RC4) or "compat" (AES-128), and rejectWeakCrypto is true,
+// the operation fails with ErrWeakCryptoRejected.
+func Encrypt(inputPath, outputPath string, encConfig policy.EncryptionConfig, rejectWeakCrypto bool) (*EncryptionResult, error) {
 	result := &EncryptionResult{
 		Success:  false,
 		Warnings: []receipt.Warning{},
@@ -46,6 +58,25 @@ func Encrypt(inputPath, outputPath string, encConfig policy.EncryptionConfig) (*
 	if !encConfig.Enabled {
 		result.Success = true
 		return result, nil
+	}
+
+	// Determine effective profile (handle auto/empty)
+	profile := encConfig.CryptoProfile
+	if profile == "" || profile == CryptoProfileAuto {
+		profile = CryptoProfileStrong
+	}
+
+	// Check if we should reject weak crypto
+	if rejectWeakCrypto {
+		if profile == CryptoProfileCompat || profile == CryptoProfileLegacy {
+			result.Error = &receipt.Error{
+				Code:    receipt.ErrWeakCryptoRejected,
+				Message: fmt.Sprintf("Weak crypto profile '%s' rejected by engine option", profile),
+				Details: map[string]string{"crypto_profile": profile},
+			}
+			// Return a typed error that can be distinguished by the caller
+			return result, &WeakCryptoError{Profile: profile}
+		}
 	}
 
 	// Map crypto profile to pdfcpu encryption config

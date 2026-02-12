@@ -4,28 +4,46 @@
 package pdf
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
 
 	"securepdf-engine/pkg/consts"
+	"securepdf-engine/pkg/options"
 	"securepdf-engine/pkg/policy"
 	"securepdf-engine/pkg/receipt"
 )
+
+// EncryptionError is a typed error that carries the receipt error code and details.
+type EncryptionError struct {
+	Code    string
+	Message string
+	Details map[string]string
+}
+
+func (e *EncryptionError) Error() string {
+	return e.Message
+}
 
 // Processor handles PDF transformations according to a policy.
 type Processor struct {
 	policy     *policy.Policy
 	inputPath  string
 	outputPath string
+	options    *options.EngineOptions
 }
 
 // NewProcessor creates a new PDF processor.
-func NewProcessor(pol *policy.Policy, inputPath, outputPath string) *Processor {
+func NewProcessor(pol *policy.Policy, inputPath, outputPath string, opts *options.EngineOptions) *Processor {
+	if opts == nil {
+		opts = options.Default()
+	}
 	return &Processor{
 		policy:     pol,
 		inputPath:  inputPath,
 		outputPath: outputPath,
+		options:    opts,
 	}
 }
 
@@ -89,6 +107,13 @@ func (p *Processor) Process() (*receipt.Receipt, error) {
 	if p.policy.Encryption.Enabled {
 		// Encrypt working file to output file
 		if err := p.applyEncryption(rec, workingPath); err != nil {
+			// Check if this is an EncryptionError with specific code
+			var encErr *EncryptionError
+			if errors.As(err, &encErr) {
+				// Use the specific error code and details from the encryption result
+				return receipt.NewErrorWithDetails(consts.EngineVersion, p.policy.PolicyVersion, encErr.Code, encErr.Message, encErr.Details), err
+			}
+			// Otherwise, return generic encryption failed error
 			return receipt.NewError(consts.EngineVersion, p.policy.PolicyVersion, receipt.ErrEncryptionFailed, err.Error()), err
 		}
 	} else {
@@ -141,8 +166,16 @@ func (p *Processor) validateInput(rec *receipt.Receipt) error {
 // applyEncryption encrypts the PDF according to the policy.
 // inputPath here is the source file to encrypt (which is our working file)
 func (p *Processor) applyEncryption(rec *receipt.Receipt, inputPath string) error {
-	encResult, err := Encrypt(inputPath, p.outputPath, p.policy.Encryption)
+	encResult, err := Encrypt(inputPath, p.outputPath, p.policy.Encryption, p.options.RejectWeakCrypto)
 	if err != nil {
+		// Check if this is a WeakCryptoError, and if so, propagate the typed error with the result
+		if encResult != nil && encResult.Error != nil {
+			return &EncryptionError{
+				Code:    encResult.Error.Code,
+				Message: encResult.Error.Message,
+				Details: encResult.Error.Details,
+			}
+		}
 		return err
 	}
 
