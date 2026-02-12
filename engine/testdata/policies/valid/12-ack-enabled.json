@@ -1,0 +1,11 @@
+{
+  "policy_version": "1.0",
+  "encryption": {
+    "enabled": false
+  },
+  "ack": {
+    "required": true,
+    "text": "OSS_DEFAULT",
+    "viewer_dependent": true
+  }
+}

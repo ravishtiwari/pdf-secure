@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"securepdf-engine/pkg/consts"
 	"securepdf-engine/pkg/policy"
 	"securepdf-engine/pkg/receipt"
 
@@ -79,6 +80,49 @@ func ApplyVisibleLabel(pdfPath string, labelConfig *policy.VisibleLabel) (*Label
 	return result, nil
 }
 
+// InvisibleLabelResult holds invisible label operation results
+type InvisibleLabelResult struct {
+	Success  bool
+	Warnings []receipt.Warning
+	Error    *receipt.Error
+}
+
+// ApplyInvisibleLabel embeds invisible metadata markers in the PDF.
+func ApplyInvisibleLabel(pdfPath string, labelConfig *policy.InvisibleLabel) (*InvisibleLabelResult, error) {
+	result := &InvisibleLabelResult{
+		Success:  false,
+		Warnings: []receipt.Warning{},
+	}
+
+	if labelConfig == nil || !labelConfig.Enabled {
+		result.Success = true
+		return result, nil
+	}
+
+	namespace := labelConfig.Namespace
+	if namespace == "" {
+		namespace = "com.securepdf.v1"
+	}
+
+	metadata := map[string]string{
+		"SecurePDF_InvisibleLabel": "true",
+		"SecurePDF_LabelNamespace": namespace,
+		"SecurePDF_LabelVersion":   consts.SecurePDFVersion,
+		"SecurePDF_LabelTimestamp": receipt.GetTimestamp(),
+	}
+
+	if err := addMetadata(pdfPath, metadata); err != nil {
+		result.Error = &receipt.Error{
+			Code:    receipt.ErrLabelFailed,
+			Message: fmt.Sprintf("Failed to embed invisible label: %v", err),
+		}
+		return result, err
+	}
+
+	result.Success = true
+	return result, nil
+}
+
 // buildWatermark creates pdfcpu watermark from label config
 func buildWatermark(label *policy.VisibleLabel) (*model.Watermark, error) {
 	// Construct description string for pdfcpu
@@ -86,27 +130,24 @@ func buildWatermark(label *policy.VisibleLabel) (*model.Watermark, error) {
 
 	// Base configuration
 	fontSize := 12
-	// offset := 28
-	rotation := 160
 	descParts := []string{
 		"font:Helvetica",
 		fmt.Sprintf("points:%d", fontSize),
-		"color:0.5 0.5 0.5",             // Gray
-		"op:0.75",                       // Opacity
-		"scale:1 abs",                   // Absolute scaling
-		fmt.Sprintf("rot:%d", rotation), // Diagonal watermark
-		"aligntext:c",                   // Explicit horizontal centering
-		"margins:0",                     // Avoid requiring background color
+		"color:0.5 0.5 0.5", // Gray
+		"op:0.75",           // Opacity
+		"scale:1 abs",       // Absolute scaling
+		"aligntext:c",       // Explicit horizontal centering
+		"margins:0",         // Avoid requiring background color
 	}
 
-	// Position - in future may be configurable
+	// Position and rotation based on placement
 	switch label.Placement {
 	case "footer":
-		descParts = append(descParts, "pos:c", "off:0 0") // Center for diagonal
+		descParts = append(descParts, "pos:bc", "off:0 20", "rot:0")
 	case "header":
-		descParts = append(descParts, "pos:c", "off:0 0")
+		descParts = append(descParts, "pos:tc", "off:0 -20", "rot:0")
 	default:
-		descParts = append(descParts, "pos:c", "off:0 0")
+		descParts = append(descParts, "pos:c", "off:0 0", "rot:160")
 	}
 
 	desc := strings.Join(descParts, ", ")

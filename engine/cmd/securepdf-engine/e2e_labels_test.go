@@ -81,6 +81,34 @@ func TestE2EVisibleLabelFirstPageOnly(t *testing.T) {
 	}
 }
 
+func TestE2EVisibleLabelHeaderPlacement(t *testing.T) {
+	inputPath := "../../test-pdfs/sample-input.pdf"
+
+	pol := &policy.Policy{
+		PolicyVersion: "1.0",
+		Encryption:    policy.EncryptionConfig{Enabled: false},
+		Labels: &policy.LabelsConfig{
+			Mode: "visible",
+			Visible: &policy.VisibleLabel{
+				Text:      "HEADER LABEL",
+				Placement: "header",
+				Pages:     "all",
+			},
+		},
+	}
+
+	outputPath, rec := runSecureWithPolicy(t, inputPath, pol)
+
+	if !rec.OK {
+		t.Fatalf("expected receipt OK to be true, got error: %+v", rec.Error)
+	}
+
+	content := extractPageContent(t, outputPath, 1, "")
+	if !contentContainsLabel(content, "HEADER LABEL") {
+		t.Fatalf("expected header label text in page content")
+	}
+}
+
 func TestE2EProvenanceIDs(t *testing.T) {
 	inputPath := "../../test-pdfs/sample-input.pdf"
 
@@ -174,6 +202,79 @@ func TestE2EEncryptionWithLabelsAndProvenance(t *testing.T) {
 	content := extractPageContent(t, outputPath, 1, password)
 	if !contentContainsLabel(content, "CONFIDENTIAL") {
 		t.Fatalf("expected label text in encrypted PDF content")
+	}
+}
+
+func TestE2EInvisibleLabelEmbedded(t *testing.T) {
+	inputPath := "../../test-pdfs/sample-input.pdf"
+
+	pol := &policy.Policy{
+		PolicyVersion: "1.0",
+		Encryption:    policy.EncryptionConfig{Enabled: false},
+		Labels: &policy.LabelsConfig{
+			Mode: "invisible",
+			Invisible: &policy.InvisibleLabel{
+				Enabled:   true,
+				Namespace: "com.securepdf.test",
+			},
+		},
+	}
+
+	outputPath, rec := runSecureWithPolicy(t, inputPath, pol)
+
+	if !rec.OK {
+		t.Fatalf("expected receipt OK to be true, got error: %+v", rec.Error)
+	}
+
+	// Verify invisible label metadata is present
+	props, err := readProperties(outputPath, "")
+	if err != nil {
+		t.Fatalf("failed to read properties: %v", err)
+	}
+
+	if props["SecurePDF_InvisibleLabel"] != "true" {
+		t.Fatalf("expected SecurePDF_InvisibleLabel=true in metadata, got: %v", props["SecurePDF_InvisibleLabel"])
+	}
+	if props["SecurePDF_LabelNamespace"] != "com.securepdf.test" {
+		t.Fatalf("expected SecurePDF_LabelNamespace=com.securepdf.test, got: %v", props["SecurePDF_LabelNamespace"])
+	}
+}
+
+func TestE2EInvisibleLabelWithEncryption(t *testing.T) {
+	inputPath := "../../test-pdfs/sample-input.pdf"
+	password := "InvisibleLabel123!"
+
+	pol := &policy.Policy{
+		PolicyVersion: "1.0",
+		Encryption: policy.EncryptionConfig{
+			Enabled:       true,
+			Mode:          "password",
+			UserPassword:  password,
+			CryptoProfile: "strong",
+		},
+		Labels: &policy.LabelsConfig{
+			Mode: "invisible",
+			Invisible: &policy.InvisibleLabel{
+				Enabled:   true,
+				Namespace: "com.securepdf.test",
+			},
+		},
+	}
+
+	outputPath, rec := runSecureWithPolicy(t, inputPath, pol)
+
+	if !rec.OK {
+		t.Fatalf("expected receipt OK to be true, got error: %+v", rec.Error)
+	}
+
+	// Verify metadata is accessible with password
+	props, err := readProperties(outputPath, password)
+	if err != nil {
+		t.Fatalf("failed to read encrypted properties: %v", err)
+	}
+
+	if props["SecurePDF_InvisibleLabel"] != "true" {
+		t.Fatalf("expected SecurePDF_InvisibleLabel=true in encrypted metadata")
 	}
 }
 

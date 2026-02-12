@@ -1,0 +1,11 @@
+{
+  "policy_version": "1.0",
+  "encryption": {
+    "enabled": false
+  },
+  "tamper_detection": {
+    "enabled": true,
+    "hash_alg": "sha256",
+    "hash_profile": "content_streams"
+  }
+}

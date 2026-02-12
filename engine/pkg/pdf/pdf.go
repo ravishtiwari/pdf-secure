@@ -82,9 +82,23 @@ func (p *Processor) Process() (*receipt.Receipt, error) {
 	}
 	defer os.Remove(workingPath) // Clean up temp file
 
+	// Stage 2b: Acknowledgment (if enabled)
+	if p.policy.Ack != nil && p.policy.Ack.Required {
+		if err := p.applyAcknowledgment(rec, workingPath); err != nil {
+			return receipt.NewError(consts.EngineVersion, p.policy.PolicyVersion, receipt.ErrLabelFailed, err.Error()), err
+		}
+	}
+
 	// Stage 3: Visible labels (if enabled)
 	if p.policy.Labels != nil && p.policy.Labels.Mode == "visible" && p.policy.Labels.Visible != nil {
 		if err := p.applyVisibleLabels(rec, workingPath); err != nil {
+			return receipt.NewError(consts.EngineVersion, p.policy.PolicyVersion, receipt.ErrLabelFailed, err.Error()), err
+		}
+	}
+
+	// Stage 3b: Invisible labels (if enabled)
+	if p.policy.Labels != nil && p.policy.Labels.Mode == "invisible" && p.policy.Labels.Invisible != nil {
+		if err := p.applyInvisibleLabels(rec, workingPath); err != nil {
 			return receipt.NewError(consts.EngineVersion, p.policy.PolicyVersion, receipt.ErrLabelFailed, err.Error()), err
 		}
 	}
@@ -203,6 +217,20 @@ func (p *Processor) applyVisibleLabels(rec *receipt.Receipt, workingPath string)
 	return nil
 }
 
+// applyInvisibleLabels embeds invisible metadata labels in the PDF.
+func (p *Processor) applyInvisibleLabels(rec *receipt.Receipt, workingPath string) error {
+	res, err := ApplyInvisibleLabel(workingPath, p.policy.Labels.Invisible)
+	if err != nil {
+		return err
+	}
+
+	if len(res.Warnings) > 0 {
+		rec.Warnings = append(rec.Warnings, res.Warnings...)
+	}
+
+	return nil
+}
+
 // applyProvenance embeds provenance information (document_id, copy_id) in the PDF.
 func (p *Processor) applyProvenance(rec *receipt.Receipt, workingPath string) error {
 	// Delegate to provenance.go
@@ -258,6 +286,20 @@ func (p *Processor) computeOutputHash(rec *receipt.Receipt) error {
 		return fmt.Errorf("failed to compute output hash: %w", err)
 	}
 	rec.OutputSHA256 = res.SHA256
+	return nil
+}
+
+// applyAcknowledgment embeds custodianship acknowledgment in the PDF.
+func (p *Processor) applyAcknowledgment(rec *receipt.Receipt, workingPath string) error {
+	res, err := ApplyAcknowledgment(workingPath, p.policy.Ack)
+	if err != nil {
+		return err
+	}
+
+	if len(res.Warnings) > 0 {
+		rec.Warnings = append(rec.Warnings, res.Warnings...)
+	}
+
 	return nil
 }
 

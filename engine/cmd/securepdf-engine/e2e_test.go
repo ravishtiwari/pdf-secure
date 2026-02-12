@@ -446,3 +446,84 @@ func TestE2EEncryptionDisabled(t *testing.T) {
 		t.Error("receipt indicates failure")
 	}
 }
+
+// TestE2EUnknownPolicyFieldWarning verifies W008 is emitted for unknown fields.
+func TestE2EUnknownPolicyFieldWarning(t *testing.T) {
+	tmpDir := t.TempDir()
+	receiptPath := filepath.Join(tmpDir, "receipt.json")
+	inputPDF := filepath.Join(tmpDir, "input.pdf")
+
+	// Create dummy input PDF
+	if err := os.WriteFile(inputPDF, []byte("%PDF-1.4\n..."), 0644); err != nil {
+		t.Fatalf("failed to create input PDF: %v", err)
+	}
+
+	args := []string{
+		"--in", inputPDF,
+		"--out", filepath.Join(tmpDir, "out.pdf"),
+		"--policy", "../../testdata/policies/valid/14-unknown-fields.json",
+		"--receipt", receiptPath,
+	}
+
+	if err := runSecure(args); err != nil {
+		t.Fatalf("runSecure failed: %v", err)
+	}
+
+	r, err := receipt.Load(receiptPath)
+	if err != nil {
+		t.Fatalf("failed to load receipt: %v", err)
+	}
+
+	if !r.OK {
+		t.Fatalf("expected ok=true, got error: %+v", r.Error)
+	}
+
+	// Check for W008 warnings
+	w008Count := 0
+	for _, w := range r.Warnings {
+		if w.Code == receipt.WarnUnknownPolicyField {
+			w008Count++
+		}
+	}
+	if w008Count < 1 {
+		t.Errorf("expected at least 1 W008 warning for unknown fields, got %d. Warnings: %+v", w008Count, r.Warnings)
+	}
+}
+
+// TestE2EUnknownPolicyFieldStillSucceeds verifies transform still succeeds with unknown fields.
+func TestE2EUnknownPolicyFieldStillSucceeds(t *testing.T) {
+	tmpDir := t.TempDir()
+	receiptPath := filepath.Join(tmpDir, "receipt.json")
+	inputPDF := filepath.Join(tmpDir, "input.pdf")
+	outputPDF := filepath.Join(tmpDir, "out.pdf")
+
+	// Create dummy input PDF
+	if err := os.WriteFile(inputPDF, []byte("%PDF-1.4\n..."), 0644); err != nil {
+		t.Fatalf("failed to create input PDF: %v", err)
+	}
+
+	args := []string{
+		"--in", inputPDF,
+		"--out", outputPDF,
+		"--policy", "../../testdata/policies/valid/14-unknown-fields.json",
+		"--receipt", receiptPath,
+	}
+
+	if err := runSecure(args); err != nil {
+		t.Fatalf("runSecure failed: %v", err)
+	}
+
+	r, err := receipt.Load(receiptPath)
+	if err != nil {
+		t.Fatalf("failed to load receipt: %v", err)
+	}
+
+	if !r.OK {
+		t.Fatalf("expected ok=true for policy with unknown fields, got error: %+v", r.Error)
+	}
+
+	// Output file should exist
+	if _, err := os.Stat(outputPDF); os.IsNotExist(err) {
+		t.Error("expected output PDF to be created despite unknown fields")
+	}
+}

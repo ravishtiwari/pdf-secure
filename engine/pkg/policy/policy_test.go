@@ -235,6 +235,49 @@ func TestLegacyPolicyCompatibility(t *testing.T) {
 	}
 }
 
+// TestUnknownFieldsGenerateW008Warning verifies unknown fields generate W008 warnings.
+func TestUnknownFieldsGenerateW008Warning(t *testing.T) {
+	jsonWithUnknown := `{
+		"policy_version": "1.0",
+		"encryption": {
+			"enabled": false
+		},
+		"future_feature": true,
+		"experimental_mode": "test"
+	}`
+
+	tmpFile := filepath.Join(t.TempDir(), "unknown-w008.json")
+	if err := os.WriteFile(tmpFile, []byte(jsonWithUnknown), 0644); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+
+	p, res, err := LoadWithOptions(tmpFile, nil)
+	if err != nil {
+		t.Fatalf("policy with unknown fields should load: %v", err)
+	}
+
+	if p.PolicyVersion != "1.0" {
+		t.Errorf("expected policy_version=1.0, got %s", p.PolicyVersion)
+	}
+
+	// Check for W008 warnings
+	if res == nil {
+		t.Fatal("expected validation result")
+	}
+
+	w008Count := 0
+	for _, w := range res.Warnings {
+		if w.Code == "W008" {
+			w008Count++
+			t.Logf("W008 warning: %s", w.Message)
+		}
+	}
+
+	if w008Count < 2 {
+		t.Errorf("expected at least 2 W008 warnings (future_feature, experimental_mode), got %d. Warnings: %+v", w008Count, res.Warnings)
+	}
+}
+
 // TestSpecificValidFixtures verifies specific fixture behaviors
 func TestSpecificValidFixtures(t *testing.T) {
 	t.Run("02-full-features-enabled", func(t *testing.T) {
