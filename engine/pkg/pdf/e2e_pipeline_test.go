@@ -458,3 +458,76 @@ func TestE2EWeakCryptoAccepted(t *testing.T) {
 		})
 	}
 }
+
+// TestE2ETamperDetectionContentStreams tests content_streams hash profile
+func TestE2ETamperDetectionContentStreams(t *testing.T) {
+	tmpDir := t.TempDir()
+	inputPath := "../../test-pdfs/sample-input.pdf"
+	outputPath := filepath.Join(tmpDir, "content-streams-output.pdf")
+
+	pol := &policy.Policy{
+		PolicyVersion: "1.0",
+		Encryption: policy.EncryptionConfig{
+			Enabled: false,
+		},
+		TamperDetection: &policy.TamperDetectionConfig{
+			Enabled:     true,
+			HashAlg:     "sha256",
+			HashProfile: "content_streams",
+		},
+	}
+
+	proc := NewProcessor(pol, inputPath, outputPath, nil)
+	rec, err := proc.Process()
+	if err != nil {
+		t.Fatalf("Process failed: %v", err)
+	}
+	if !rec.OK {
+		t.Fatalf("Expected receipt OK to be true, got error: %+v", rec.Error)
+	}
+	if rec.InputContentHash == "" {
+		t.Error("Expected content hash to be set with content_streams profile")
+	}
+
+	// Content hash should be a valid SHA-256 (64 hex chars)
+	if len(rec.InputContentHash) != 64 {
+		t.Errorf("Expected 64-char SHA-256 hash, got %d chars", len(rec.InputContentHash))
+	}
+}
+
+// TestE2ETamperDetectionContentStreamsVerify tests content_streams hash verification
+func TestE2ETamperDetectionContentStreamsVerify(t *testing.T) {
+	tmpDir := t.TempDir()
+	inputPath := "../../test-pdfs/sample-input.pdf"
+	outputPath := filepath.Join(tmpDir, "content-streams-verify.pdf")
+
+	pol := &policy.Policy{
+		PolicyVersion: "1.0",
+		Encryption: policy.EncryptionConfig{
+			Enabled: false,
+		},
+		TamperDetection: &policy.TamperDetectionConfig{
+			Enabled:     true,
+			HashAlg:     "sha256",
+			HashProfile: "content_streams",
+		},
+	}
+
+	proc := NewProcessor(pol, inputPath, outputPath, nil)
+	rec, err := proc.Process()
+	if err != nil {
+		t.Fatalf("Process failed: %v", err)
+	}
+	if !rec.OK {
+		t.Fatalf("Expected receipt OK to be true, got error: %+v", rec.Error)
+	}
+
+	// Verify the tamper detection passes
+	valid, err := VerifyTamperDetection(outputPath)
+	if err != nil {
+		t.Fatalf("VerifyTamperDetection failed: %v", err)
+	}
+	if !valid {
+		t.Error("VerifyTamperDetection returned false, expected true for content_streams profile")
+	}
+}

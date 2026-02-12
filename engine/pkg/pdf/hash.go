@@ -119,6 +119,83 @@ func HashPDFObjectsExcludingMetadata(pdfPath string) (string, error) {
 	return hex.EncodeToString(hasher.Sum(nil)), nil
 }
 
+// HashPDFContentStreams computes SHA-256 of content streams only, excluding metadata.
+// This profile hashes only the actual content stream data (decoded bytes),
+// making it sensitive to content changes but not to metadata/structure changes.
+func HashPDFContentStreams(pdfPath string) (string, error) {
+	ctx, err := api.ReadContextFile(pdfPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read PDF context: %w", err)
+	}
+
+	// Identify Info dictionary object number (to exclude)
+	var infoObjNr int
+	if ctx.XRefTable.Info != nil {
+		infoObjNr = ctx.XRefTable.Info.ObjectNumber.Value()
+	}
+
+	// Extract and sort keys for determinism
+	keys := make([]int, 0, len(ctx.XRefTable.Table))
+	for k := range ctx.XRefTable.Table {
+		keys = append(keys, k)
+	}
+	sort.Ints(keys)
+
+	hasher := sha256.New()
+	streamCount := 0
+
+	for _, objNr := range keys {
+		// Skip Info dict
+		if objNr == infoObjNr {
+			continue
+		}
+
+		entry := ctx.XRefTable.Table[objNr]
+		if entry.Free {
+			continue
+		}
+
+		// Only process StreamDict objects
+		sd, ok := entry.Object.(types.StreamDict)
+		if !ok {
+			continue
+		}
+
+		// Skip Metadata streams
+		if sd.Dict["Type"] == types.Name("Metadata") {
+			continue
+		}
+
+		// Include object number for ordering stability
+		if _, err := io.WriteString(hasher, fmt.Sprintf("stream:%d:", objNr)); err != nil {
+			return "", err
+		}
+
+		// Hash the content stream data
+		if sd.Content != nil {
+			if _, err := hasher.Write(sd.Content); err != nil {
+				return "", err
+			}
+		} else if sd.Raw != nil {
+			if _, err := hasher.Write(sd.Raw); err != nil {
+				return "", err
+			}
+		}
+
+		if _, err := io.WriteString(hasher, "\n"); err != nil {
+			return "", err
+		}
+		streamCount++
+	}
+
+	// If no streams found, fall back to whole-file hash for safety
+	if streamCount == 0 {
+		return HashPDFContent(pdfPath)
+	}
+
+	return hex.EncodeToString(hasher.Sum(nil)), nil
+}
+
 // errWriter wraps an io.Writer and captures the first write error.
 // After a write error, all subsequent writes become no-ops.
 // This avoids the need to check every io.WriteString call individually.

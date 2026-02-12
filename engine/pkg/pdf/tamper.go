@@ -52,6 +52,8 @@ func ApplyTamperDetection(pdfPath string, tdConfig *policy.TamperDetectionConfig
 	switch profile {
 	case consts.HashProfileObjectsOnly:
 		contentHash, err = HashPDFObjectsExcludingMetadata(pdfPath)
+	case consts.HashProfileContentStreams:
+		contentHash, err = HashPDFContentStreams(pdfPath)
 	case consts.HashProfileExternal:
 		// Legacy/External: Hash the entire file
 		contentHash, err = HashPDFContent(pdfPath)
@@ -150,8 +152,9 @@ func VerifyTamperDetection(pdfPath string) (bool, error) {
 	switch embeddedProfile {
 	case consts.HashProfileObjectsOnly:
 		computedHash, err = HashPDFObjectsExcludingMetadata(pdfPath)
+	case consts.HashProfileContentStreams:
+		computedHash, err = HashPDFContentStreams(pdfPath)
 	case consts.HashProfileExternal:
-		// Verify external profile
 		computedHash, err = HashPDFContent(pdfPath)
 	default:
 		computedHash, err = HashPDFObjectsExcludingMetadata(pdfPath)

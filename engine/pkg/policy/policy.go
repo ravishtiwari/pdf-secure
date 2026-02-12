@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"securepdf-engine/pkg/options"
+	"securepdf-engine/pkg/receipt"
 )
 
 // Policy defines the transformation and security rules for a PDF (V1 schema).
@@ -127,6 +128,9 @@ func LoadWithOptions(path string, opts *options.EngineOptions) (*Policy, *Valida
 		}
 	}
 
+	// Detect unknown top-level fields
+	unknownWarnings := detectUnknownFields(data)
+
 	policy.applyDefaults()
 
 	var res *ValidationResult
@@ -134,6 +138,11 @@ func LoadWithOptions(path string, opts *options.EngineOptions) (*Policy, *Valida
 		res = policy.ValidateWithOptions(opts)
 	} else {
 		res = policy.Validate()
+	}
+
+	// Append unknown field warnings
+	for _, w := range unknownWarnings {
+		res.Warnings = append(res.Warnings, w)
 	}
 
 	return &policy, res, nil
@@ -251,4 +260,34 @@ func (policy *Policy) applyDefaults() {
 	if policy.Ack != nil && policy.Ack.Text == "" {
 		policy.Ack.Text = defaultAckText(policy.Ack)
 	}
+}
+
+// knownTopLevelFields lists the recognized top-level policy fields.
+var knownTopLevelFields = map[string]bool{
+	"policy_version":   true,
+	"encryption":       true,
+	"ack":              true,
+	"labels":           true,
+	"provenance":       true,
+	"tamper_detection": true,
+}
+
+// detectUnknownFields unmarshals raw JSON into a map and returns W008 warnings
+// for any top-level keys not in the known set.
+func detectUnknownFields(data []byte) []receipt.Warning {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil
+	}
+
+	var warnings []receipt.Warning
+	for key := range raw {
+		if !knownTopLevelFields[key] {
+			warnings = append(warnings, receipt.Warning{
+				Code:    receipt.WarnUnknownPolicyField,
+				Message: fmt.Sprintf("Unknown policy field %q ignored", key),
+			})
+		}
+	}
+	return warnings
 }

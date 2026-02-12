@@ -1,0 +1,13 @@
+{
+  "policy_version": "1.0",
+  "encryption": {
+    "enabled": false
+  },
+  "labels": {
+    "mode": "invisible",
+    "invisible": {
+      "enabled": true,
+      "namespace": "com.securepdf.v1"
+    }
+  }
+}
