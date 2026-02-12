@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"testing"
 
+	"securepdf-engine/pkg/options"
 	"securepdf-engine/pkg/policy"
 	"securepdf-engine/pkg/receipt"
 )
@@ -40,7 +41,7 @@ func TestE2EProcessPipelineFullFeatures(t *testing.T) {
 		},
 	}
 
-	proc := NewProcessor(pol, inputPath, outputPath)
+	proc := NewProcessor(pol, inputPath, outputPath, nil)
 	rec, err := proc.Process()
 	if err != nil {
 		t.Fatalf("Process failed: %v", err)
@@ -101,7 +102,7 @@ func TestE2EMinimalPipeline(t *testing.T) {
 		},
 	}
 
-	proc := NewProcessor(pol, inputPath, outputPath)
+	proc := NewProcessor(pol, inputPath, outputPath, nil)
 	rec, err := proc.Process()
 	if err != nil {
 		t.Fatalf("Process failed: %v", err)
@@ -144,7 +145,7 @@ func TestE2EInputValidation(t *testing.T) {
 		},
 	}
 
-	proc := NewProcessor(pol, invalidInput, outputPath)
+	proc := NewProcessor(pol, invalidInput, outputPath, nil)
 	rec, err := proc.Process()
 
 	if err == nil {
@@ -174,7 +175,7 @@ func TestE2EInputNotFound(t *testing.T) {
 		},
 	}
 
-	proc := NewProcessor(pol, missingInput, outputPath)
+	proc := NewProcessor(pol, missingInput, outputPath, nil)
 	rec, err := proc.Process()
 
 	if err == nil {
@@ -228,7 +229,7 @@ func TestE2EPipelineWithEncryption(t *testing.T) {
 		},
 	}
 
-	proc := NewProcessor(pol, inputPath, outputPath)
+	proc := NewProcessor(pol, inputPath, outputPath, nil)
 	rec, err := proc.Process()
 	if err != nil {
 		t.Fatalf("Process failed: %v", err)
@@ -282,7 +283,7 @@ func TestE2ETamperDetectionOnly(t *testing.T) {
 		},
 	}
 
-	proc := NewProcessor(pol, inputPath, outputPath)
+	proc := NewProcessor(pol, inputPath, outputPath, nil)
 	rec, err := proc.Process()
 	if err != nil {
 		t.Fatalf("Process failed: %v", err)
@@ -306,5 +307,154 @@ func TestE2ETamperDetectionOnly(t *testing.T) {
 	}
 	if !valid {
 		t.Error("VerifyTamperDetection returned false, expected true")
+	}
+}
+
+// TestE2EWeakCryptoRejection tests that weak crypto profiles are properly rejected
+// and that the correct error code (ErrWeakCryptoRejected) is returned in the receipt
+func TestE2EWeakCryptoRejection(t *testing.T) {
+	tmpDir := t.TempDir()
+	inputPath := "../../test-pdfs/sample-input.pdf"
+	outputPath := filepath.Join(tmpDir, "rejected-output.pdf")
+
+	testCases := []struct {
+		name    string
+		profile string
+	}{
+		{"reject_legacy", "legacy"},
+		{"reject_compat", "compat"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			pol := &policy.Policy{
+				PolicyVersion: "1.0",
+				Encryption: policy.EncryptionConfig{
+					Enabled:       true,
+					Mode:          "password",
+					UserPassword:  "test123",
+					CryptoProfile: tc.profile,
+				},
+			}
+
+			// Create processor with RejectWeakCrypto enabled
+			opts := &options.EngineOptions{
+				RejectWeakCrypto: true,
+				TimeoutMs:        60000,
+				MaxInputMB:       200,
+				MaxMemoryMB:      512,
+			}
+
+			proc := NewProcessor(pol, inputPath, outputPath, opts)
+			rec, err := proc.Process()
+
+			// Should fail with error
+			if err == nil {
+				t.Error("Expected error for weak crypto rejection")
+			}
+
+			// Receipt should indicate failure
+			if rec.OK {
+				t.Error("Expected receipt OK to be false for weak crypto rejection")
+			}
+
+			// Receipt should have the specific error code
+			if rec.Error == nil {
+				t.Fatal("Expected error details in receipt")
+			}
+
+			if rec.Error.Code != receipt.ErrWeakCryptoRejected {
+				t.Errorf("Expected error code %s, got %s", receipt.ErrWeakCryptoRejected, rec.Error.Code)
+			}
+
+			// Error message should mention the profile
+			if rec.Error.Message == "" {
+				t.Error("Expected error message to be set")
+			}
+
+			// Details should include the crypto profile
+			if rec.Error.Details == nil {
+				t.Fatal("Expected error details to be set")
+			}
+
+			if profile, ok := rec.Error.Details["crypto_profile"]; !ok || profile != tc.profile {
+				t.Errorf("Expected crypto_profile detail to be %s, got %s", tc.profile, profile)
+			}
+
+			// Output file should not exist (transformation failed)
+			if _, err := os.Stat(outputPath); !os.IsNotExist(err) {
+				t.Error("Expected output file to not exist after rejection")
+			}
+		})
+	}
+}
+
+// TestE2EWeakCryptoAccepted tests that weak crypto profiles are accepted
+// when RejectWeakCrypto is false (default behavior)
+func TestE2EWeakCryptoAccepted(t *testing.T) {
+	tmpDir := t.TempDir()
+	inputPath := "../../test-pdfs/sample-input.pdf"
+
+	testCases := []struct {
+		name    string
+		profile string
+	}{
+		{"accept_legacy", "legacy"},
+		{"accept_compat", "compat"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			outputPath := filepath.Join(tmpDir, tc.name+"-output.pdf")
+
+			pol := &policy.Policy{
+				PolicyVersion: "1.0",
+				Encryption: policy.EncryptionConfig{
+					Enabled:       true,
+					Mode:          "password",
+					UserPassword:  "test123",
+					CryptoProfile: tc.profile,
+				},
+			}
+
+			// Create processor with RejectWeakCrypto disabled (default)
+			opts := &options.EngineOptions{
+				RejectWeakCrypto: false,
+				TimeoutMs:        60000,
+				MaxInputMB:       200,
+				MaxMemoryMB:      512,
+			}
+
+			proc := NewProcessor(pol, inputPath, outputPath, opts)
+			rec, err := proc.Process()
+
+			// Should succeed
+			if err != nil {
+				t.Fatalf("Process failed unexpectedly: %v", err)
+			}
+
+			if !rec.OK {
+				t.Fatalf("Expected receipt OK to be true, got error: %+v", rec.Error)
+			}
+
+			// Should have a warning for legacy profile
+			if tc.profile == "legacy" {
+				foundWarning := false
+				for _, w := range rec.Warnings {
+					if w.Code == receipt.WarnWeakCryptoRequested {
+						foundWarning = true
+						break
+					}
+				}
+				if !foundWarning {
+					t.Error("Expected WarnWeakCryptoRequested warning for legacy profile")
+				}
+			}
+
+			// Output file should exist
+			if _, err := os.Stat(outputPath); err != nil {
+				t.Errorf("Expected output file to exist: %v", err)
+			}
+		})
 	}
 }

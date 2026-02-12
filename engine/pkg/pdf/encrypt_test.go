@@ -26,7 +26,7 @@ func TestEncryptWithAES256(t *testing.T) {
 	}
 
 	// Execute
-	result, err := Encrypt(inputPath, outputPath, encConfig)
+	result, err := Encrypt(inputPath, outputPath, encConfig, false)
 	if err != nil {
 		t.Fatalf("Encrypt failed: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestEncryptWithAES128(t *testing.T) {
 	}
 
 	// Execute
-	result, err := Encrypt(inputPath, outputPath, encConfig)
+	result, err := Encrypt(inputPath, outputPath, encConfig, false)
 	if err != nil {
 		t.Fatalf("Encrypt failed: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestEncryptWithRC4Legacy(t *testing.T) {
 	}
 
 	// Execute
-	result, err := Encrypt(inputPath, outputPath, encConfig)
+	result, err := Encrypt(inputPath, outputPath, encConfig, false)
 	if err != nil {
 		t.Fatalf("Encrypt failed: %v", err)
 	}
@@ -102,6 +102,7 @@ func TestEncryptWithRC4Legacy(t *testing.T) {
 			break
 		}
 	}
+
 	if !foundWarning {
 		t.Error("Expected WarnWeakCryptoRequested warning for legacy profile")
 	}
@@ -122,7 +123,7 @@ func TestEncryptWithPermissions(t *testing.T) {
 	}
 
 	// Execute
-	result, err := Encrypt(inputPath, outputPath, encConfig)
+	result, err := Encrypt(inputPath, outputPath, encConfig, false)
 	if err != nil {
 		t.Fatalf("Encrypt failed: %v", err)
 	}
@@ -147,7 +148,7 @@ func TestEncryptWithAutoProfile(t *testing.T) {
 	}
 
 	// Execute
-	result, err := Encrypt(inputPath, outputPath, encConfig)
+	result, err := Encrypt(inputPath, outputPath, encConfig, false)
 	if err != nil {
 		t.Fatalf("Encrypt failed: %v", err)
 	}
@@ -174,7 +175,7 @@ func TestEncryptDisabled(t *testing.T) {
 	}
 
 	// Execute
-	result, err := Encrypt(inputPath, outputPath, encConfig)
+	result, err := Encrypt(inputPath, outputPath, encConfig, false)
 	if err != nil {
 		t.Fatalf("Encrypt failed: %v", err)
 	}
@@ -203,7 +204,7 @@ func TestEncryptProducesActuallyEncryptedPDF(t *testing.T) {
 	}
 
 	// Encrypt
-	result, err := Encrypt(inputPath, outputPath, encConfig)
+	result, err := Encrypt(inputPath, outputPath, encConfig, false)
 	if err != nil {
 		t.Fatalf("Encrypt failed: %v", err)
 	}
@@ -270,7 +271,7 @@ func TestEncryptOwnerPasswordDiffersFromUser(t *testing.T) {
 	}
 
 	// Also verify the full encrypt flow works
-	result, err := Encrypt(inputPath, outputPath, encConfig)
+	result, err := Encrypt(inputPath, outputPath, encConfig, false)
 	if err != nil {
 		t.Fatalf("Encrypt failed: %v", err)
 	}
@@ -301,7 +302,7 @@ func TestEncryptExplicitOwnerPassword(t *testing.T) {
 		t.Errorf("Expected owner password 'myownerpass', got '%s'", conf.OwnerPW)
 	}
 
-	result, err := Encrypt(inputPath, outputPath, encConfig)
+	result, err := Encrypt(inputPath, outputPath, encConfig, false)
 	if err != nil {
 		t.Fatalf("Encrypt failed: %v", err)
 	}
@@ -367,5 +368,44 @@ func TestEncryptPermissionsAreSet(t *testing.T) {
 				t.Errorf("modify permission: got %v, want %v", hasModify, tt.wantModify)
 			}
 		})
+	}
+}
+
+func TestEncryptWithRejectWeakCrypto(t *testing.T) {
+	// Setup
+	tmpDir := t.TempDir()
+	inputPath := "../../test-pdfs/sample-input.pdf"
+	outputPath := filepath.Join(tmpDir, "output-rc4-rejected.pdf")
+
+	// Config with legacy profile
+	encConfig := policy.EncryptionConfig{
+		Enabled:       true,
+		UserPassword:  "password",
+		CryptoProfile: "legacy",
+	}
+
+	// Execute with rejectWeakCrypto = true
+	result, err := Encrypt(inputPath, outputPath, encConfig, true)
+
+	// Verify error
+	if err == nil {
+		t.Fatal("Expected error when rejecting weak crypto, got nil")
+	}
+
+	if result.Error == nil {
+		t.Fatal("Expected result.Error to be populated")
+	}
+	if result.Error.Code != receipt.ErrWeakCryptoRejected {
+		t.Errorf("Expected error code %s, got: %s", receipt.ErrWeakCryptoRejected, result.Error.Code)
+	}
+
+	// Verify result
+	if result.Success {
+		t.Error("Expected Success to be false")
+	}
+
+	// Verify file does not exist
+	if _, err := os.Stat(outputPath); !os.IsNotExist(err) {
+		t.Error("Output file should not be created when weak crypto is rejected")
 	}
 }
