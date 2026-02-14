@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 
 	"securepdf-engine/pkg/options"
@@ -529,5 +530,292 @@ func TestE2ETamperDetectionContentStreamsVerify(t *testing.T) {
 	}
 	if !valid {
 		t.Error("VerifyTamperDetection returned false, expected true for content_streams profile")
+	}
+}
+
+// TestE2ECorruptedPDFRejection tests that corrupted PDFs are properly rejected
+func TestE2ECorruptedPDFRejection(t *testing.T) {
+	tmpDir := t.TempDir()
+	corruptedInput := filepath.Join(tmpDir, "corrupted.pdf")
+	outputPath := filepath.Join(tmpDir, "output.pdf")
+
+	// Create a file with PDF header followed by garbage data
+	garbageData := []byte("%PDF-1.4\n%")
+	garbageData = append(garbageData, []byte("this is not valid PDF content at all")...)
+	garbageData = append(garbageData, []byte("\nmore garbage\x00\x01\x02\xFF\xFE")...)
+
+	if err := os.WriteFile(corruptedInput, garbageData, 0644); err != nil {
+		t.Fatalf("Failed to create corrupted test file: %v", err)
+	}
+
+	// Use minimal policy (encryption disabled)
+	pol := &policy.Policy{
+		PolicyVersion: "1.0",
+		Encryption: policy.EncryptionConfig{
+			Enabled: false,
+		},
+	}
+
+	proc := NewProcessor(pol, corruptedInput, outputPath, nil)
+	rec, err := proc.Process()
+
+	// Should fail
+	if err == nil {
+		t.Error("Expected error for corrupted PDF input")
+	}
+
+	// Receipt should indicate failure
+	if rec.OK {
+		t.Error("Expected receipt OK to be false for corrupted input")
+	}
+
+	// Receipt should have error details
+	if rec.Error == nil {
+		t.Fatal("Expected error details in receipt")
+	}
+
+	// Should be E002 or E003
+	if rec.Error.Code != receipt.ErrInputPDFInvalid && rec.Error.Code != receipt.ErrInputPDFUnsupported {
+		t.Errorf("Expected error code E002 or E003, got %s", rec.Error.Code)
+	}
+
+	// Error message should mention invalid or corrupted
+	errMsg := strings.ToLower(rec.Error.Message)
+	if !strings.Contains(errMsg, "invalid") && !strings.Contains(errMsg, "corrupt") {
+		t.Errorf("Expected error message to mention 'invalid' or 'corrupted', got: %s", rec.Error.Message)
+	}
+}
+
+// TestE2ETruncatedPDFRejection tests that truncated PDFs are properly rejected
+func TestE2ETruncatedPDFRejection(t *testing.T) {
+	tmpDir := t.TempDir()
+	truncatedInput := filepath.Join(tmpDir, "truncated.pdf")
+	outputPath := filepath.Join(tmpDir, "output.pdf")
+
+	// Read a valid PDF and truncate it to half its size
+	validPDFPath := "../../test-pdfs/sample-input.pdf"
+	validData, err := os.ReadFile(validPDFPath)
+	if err != nil {
+		t.Fatalf("Failed to read valid PDF: %v", err)
+	}
+
+	// Truncate to half size
+	truncatedData := validData[:len(validData)/2]
+	if err := os.WriteFile(truncatedInput, truncatedData, 0644); err != nil {
+		t.Fatalf("Failed to create truncated test file: %v", err)
+	}
+
+	// Use minimal policy
+	pol := &policy.Policy{
+		PolicyVersion: "1.0",
+		Encryption: policy.EncryptionConfig{
+			Enabled: false,
+		},
+	}
+
+	proc := NewProcessor(pol, truncatedInput, outputPath, nil)
+	rec, err := proc.Process()
+
+	// Should fail
+	if err == nil {
+		t.Error("Expected error for truncated PDF input")
+	}
+
+	// Receipt should indicate failure
+	if rec.OK {
+		t.Error("Expected receipt OK to be false for truncated input")
+	}
+
+	// Receipt should have error details
+	if rec.Error == nil {
+		t.Fatal("Expected error details in receipt")
+	}
+
+	// Should be E002 (invalid/corrupted)
+	if rec.Error.Code != receipt.ErrInputPDFInvalid {
+		t.Errorf("Expected error code %s, got %s", receipt.ErrInputPDFInvalid, rec.Error.Code)
+	}
+
+	// Error message should mention validation failure
+	errMsg := strings.ToLower(rec.Error.Message)
+	if !strings.Contains(errMsg, "validat") && !strings.Contains(errMsg, "invalid") && !strings.Contains(errMsg, "corrupt") {
+		t.Errorf("Expected error message to mention validation failure, got: %s", rec.Error.Message)
+	}
+}
+
+// TestE2EMaxInputMBRejection tests that files exceeding max_input_mb are rejected
+func TestE2EMaxInputMBRejection(t *testing.T) {
+	tmpDir := t.TempDir()
+	inputPath := "../../test-pdfs/sample-input.pdf"
+	outputPath := filepath.Join(tmpDir, "rejected-output.pdf")
+
+	pol := &policy.Policy{
+		PolicyVersion: "1.0",
+		Encryption: policy.EncryptionConfig{
+			Enabled: false,
+		},
+	}
+
+	// Create engine options with very small max_input_mb (0 MB)
+	// This should reject any file (even small ones)
+	opts := &options.EngineOptions{
+		RejectWeakCrypto: false,
+		TimeoutMs:        60000,
+		MaxInputMB:       0, // Zero limit - reject all files
+		MaxMemoryMB:      512,
+	}
+
+	proc := NewProcessor(pol, inputPath, outputPath, opts)
+	rec, err := proc.Process()
+
+	// Should fail with error
+	if err == nil {
+		t.Error("Expected error for oversized input file")
+	}
+
+	// Receipt should indicate failure
+	if rec.OK {
+		t.Error("Expected receipt OK to be false for oversized input")
+	}
+
+	// Receipt should have the E002 error code (input invalid)
+	if rec.Error == nil {
+		t.Fatal("Expected error details in receipt")
+	}
+
+	if rec.Error.Code != receipt.ErrInputPDFInvalid {
+		t.Errorf("Expected error code %s, got %s", receipt.ErrInputPDFInvalid, rec.Error.Code)
+	}
+
+	// Error message should mention "too large"
+	if rec.Error.Message == "" {
+		t.Error("Expected error message to be set")
+	}
+	if !regexp.MustCompile("too large").MatchString(rec.Error.Message) {
+		t.Errorf("Expected error message to contain 'too large', got: %s", rec.Error.Message)
+	}
+
+	// Output file should not exist (transformation failed)
+	if _, err := os.Stat(outputPath); !os.IsNotExist(err) {
+		t.Error("Expected output file to not exist after rejection")
+	}
+}
+
+// TestE2ETimeoutEnforcement tests that processing timeout is enforced
+func TestE2ETimeoutEnforcement(t *testing.T) {
+	tmpDir := t.TempDir()
+	inputPath := "../../test-pdfs/sample-input.pdf"
+	outputPath := filepath.Join(tmpDir, "timeout-output.pdf")
+
+	pol := &policy.Policy{
+		PolicyVersion: "1.0",
+		Encryption: policy.EncryptionConfig{
+			Enabled: false,
+		},
+		// Enable multiple features to increase processing time
+		Labels: &policy.LabelsConfig{
+			Mode: "visible",
+			Visible: &policy.VisibleLabel{
+				Text:      "TEST",
+				Placement: "footer",
+				Pages:     "all",
+			},
+		},
+		Provenance: &policy.ProvenanceConfig{
+			Enabled:    true,
+			DocumentID: "auto",
+			CopyID:     "auto",
+		},
+		TamperDetection: &policy.TamperDetectionConfig{
+			Enabled: true,
+			HashAlg: "sha256",
+		},
+	}
+
+	// Create engine options with very short timeout (1 millisecond)
+	// This should be impossible to complete
+	opts := &options.EngineOptions{
+		RejectWeakCrypto: false,
+		TimeoutMs:        1, // 1 millisecond - impossible to complete
+		MaxInputMB:       200,
+		MaxMemoryMB:      512,
+	}
+
+	proc := NewProcessor(pol, inputPath, outputPath, opts)
+	rec, err := proc.Process()
+
+	// Should fail with error
+	if err == nil {
+		t.Error("Expected error for timeout")
+	}
+
+	// Receipt should indicate failure
+	if rec.OK {
+		t.Error("Expected receipt OK to be false for timeout")
+	}
+
+	// Receipt should have the E009 error code (timeout)
+	if rec.Error == nil {
+		t.Fatal("Expected error details in receipt")
+	}
+
+	if rec.Error.Code != receipt.ErrRuntimeTimeout {
+		t.Errorf("Expected error code %s, got %s", receipt.ErrRuntimeTimeout, rec.Error.Code)
+	}
+
+	// Error message should mention "timeout"
+	if rec.Error.Message == "" {
+		t.Error("Expected error message to be set")
+	}
+	if !regexp.MustCompile("timeout").MatchString(rec.Error.Message) {
+		t.Errorf("Expected error message to contain 'timeout', got: %s", rec.Error.Message)
+	}
+}
+
+// TestE2EMaxInputMBAccepted tests that files within max_input_mb are accepted
+func TestE2EMaxInputMBAccepted(t *testing.T) {
+	tmpDir := t.TempDir()
+	inputPath := "../../test-pdfs/sample-input.pdf"
+	outputPath := filepath.Join(tmpDir, "accepted-output.pdf")
+
+	pol := &policy.Policy{
+		PolicyVersion: "1.0",
+		Encryption: policy.EncryptionConfig{
+			Enabled: false,
+		},
+	}
+
+	// Create engine options with high max_input_mb limit (1000 MB)
+	// This should accept normal PDF files
+	opts := &options.EngineOptions{
+		RejectWeakCrypto: false,
+		TimeoutMs:        60000,
+		MaxInputMB:       1000, // High limit
+		MaxMemoryMB:      512,
+	}
+
+	proc := NewProcessor(pol, inputPath, outputPath, opts)
+	rec, err := proc.Process()
+
+	// Should succeed
+	if err != nil {
+		t.Fatalf("Process failed unexpectedly: %v", err)
+	}
+
+	if !rec.OK {
+		t.Fatalf("Expected receipt OK to be true, got error: %+v", rec.Error)
+	}
+
+	// Verify output file exists
+	if _, err := os.Stat(outputPath); err != nil {
+		t.Errorf("Expected output file to exist: %v", err)
+	}
+
+	// Verify hashes are populated
+	if rec.InputSHA256 == "" {
+		t.Error("Expected input hash to be set")
+	}
+	if rec.OutputSHA256 == "" {
+		t.Error("Expected output hash to be set")
 	}
 }
