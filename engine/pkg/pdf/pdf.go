@@ -4,11 +4,16 @@
 package pdf
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"runtime"
+	"strings"
+	"time"
 
+	"github.com/pdfcpu/pdfcpu/pkg/api"
 	"securepdf-engine/pkg/consts"
 	"securepdf-engine/pkg/options"
 	"securepdf-engine/pkg/policy"
@@ -60,17 +65,38 @@ func NewProcessor(pol *policy.Policy, inputPath, outputPath string, opts *option
 //  7. Encryption - apply password and permissions (if enabled)
 //  8. Output hashing - compute final file hash for receipt
 func (p *Processor) Process() (*receipt.Receipt, error) {
+	// Create timeout context if timeout is configured
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if p.options.TimeoutMs > 0 {
+		ctx, cancel = context.WithTimeout(context.Background(), time.Duration(p.options.TimeoutMs)*time.Millisecond)
+		defer cancel()
+	} else {
+		ctx = context.Background()
+	}
+
 	// Create success receipt initially
 	rec := receipt.NewSuccess(consts.EngineVersion, p.policy.PolicyVersion)
 
 	// Stage 1: Input validation
 	if err := p.validateInput(rec); err != nil {
+		// Check error message to determine E002 vs E003
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "unsupported") || strings.Contains(errMsg, "feature") {
+			return receipt.NewError(consts.EngineVersion, p.policy.PolicyVersion, receipt.ErrInputPDFUnsupported, err.Error()), err
+		}
+		// Default to E002 for corruption/invalid
 		return receipt.NewError(consts.EngineVersion, p.policy.PolicyVersion, receipt.ErrInputPDFInvalid, err.Error()), err
 	}
 
 	// Stage 2: Input hashing
 	if err := p.computeInputHash(rec); err != nil {
 		return receipt.NewError(consts.EngineVersion, p.policy.PolicyVersion, receipt.ErrInputReadFailed, err.Error()), err
+	}
+
+	// Check timeout after hashing
+	if err := p.checkTimeout(ctx); err != nil {
+		return receipt.NewError(consts.EngineVersion, p.policy.PolicyVersion, receipt.ErrRuntimeTimeout, err.Error()), err
 	}
 
 	// Prepare working file (intermediate)
@@ -81,6 +107,11 @@ func (p *Processor) Process() (*receipt.Receipt, error) {
 		return receipt.NewError(consts.EngineVersion, p.policy.PolicyVersion, receipt.ErrInternalError, fmt.Sprintf("failed to create working file: %v", err)), err
 	}
 	defer os.Remove(workingPath) // Clean up temp file
+
+	// Check timeout after copying
+	if err := p.checkTimeout(ctx); err != nil {
+		return receipt.NewError(consts.EngineVersion, p.policy.PolicyVersion, receipt.ErrRuntimeTimeout, err.Error()), err
+	}
 
 	// Stage 2b: Acknowledgment (if enabled)
 	if p.policy.Ack != nil && p.policy.Ack.Required {
@@ -103,6 +134,11 @@ func (p *Processor) Process() (*receipt.Receipt, error) {
 		}
 	}
 
+	// Check timeout after labels
+	if err := p.checkTimeout(ctx); err != nil {
+		return receipt.NewError(consts.EngineVersion, p.policy.PolicyVersion, receipt.ErrRuntimeTimeout, err.Error()), err
+	}
+
 	// Stage 4: Provenance (if enabled)
 	if p.policy.Provenance != nil && p.policy.Provenance.Enabled {
 		if err := p.applyProvenance(rec, workingPath); err != nil {
@@ -110,11 +146,26 @@ func (p *Processor) Process() (*receipt.Receipt, error) {
 		}
 	}
 
+	// Check timeout after provenance
+	if err := p.checkTimeout(ctx); err != nil {
+		return receipt.NewError(consts.EngineVersion, p.policy.PolicyVersion, receipt.ErrRuntimeTimeout, err.Error()), err
+	}
+
 	// Stage 5: Tamper detection (if enabled)
 	if p.policy.TamperDetection != nil && p.policy.TamperDetection.Enabled {
 		if err := p.applyTamperDetection(rec, workingPath); err != nil {
 			return receipt.NewError(consts.EngineVersion, p.policy.PolicyVersion, receipt.ErrTamperHashFailed, err.Error()), err
 		}
+	}
+
+	// Check memory after tamper detection (heavy operation)
+	if err := p.checkMemory(); err != nil {
+		return receipt.NewError(consts.EngineVersion, p.policy.PolicyVersion, receipt.ErrRuntimeMemoryLimit, err.Error()), err
+	}
+
+	// Check timeout after tamper detection
+	if err := p.checkTimeout(ctx); err != nil {
+		return receipt.NewError(consts.EngineVersion, p.policy.PolicyVersion, receipt.ErrRuntimeTimeout, err.Error()), err
 	}
 
 	// Stage 6: Encryption (or Final Copy)
@@ -137,12 +188,39 @@ func (p *Processor) Process() (*receipt.Receipt, error) {
 		}
 	}
 
+	// Check memory after encryption (heavy operation)
+	if err := p.checkMemory(); err != nil {
+		return receipt.NewError(consts.EngineVersion, p.policy.PolicyVersion, receipt.ErrRuntimeMemoryLimit, err.Error()), err
+	}
+
 	// Stage 7: Output hashing
 	if err := p.computeOutputHash(rec); err != nil {
 		return receipt.NewError(consts.EngineVersion, p.policy.PolicyVersion, receipt.ErrOutputWriteFailed, err.Error()), err
 	}
 
 	return rec, nil
+}
+
+// checkTimeout checks if the processing has exceeded the timeout limit.
+func (p *Processor) checkTimeout(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf("processing timeout exceeded")
+	default:
+		return nil
+	}
+}
+
+// checkMemory checks if the processing has exceeded the memory limit.
+// This is a best-effort check using Go's runtime stats.
+func (p *Processor) checkMemory() error {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	allocMB := m.Alloc / 1024 / 1024
+	if allocMB > uint64(p.options.MaxMemoryMB) {
+		return fmt.Errorf("memory limit exceeded: %d MB (limit: %d MB)", allocMB, p.options.MaxMemoryMB)
+	}
+	return nil
 }
 
 // validateInput validates that the input PDF exists and is readable.
@@ -156,6 +234,13 @@ func (p *Processor) validateInput(rec *receipt.Receipt) error {
 	}
 	if info.IsDir() {
 		return fmt.Errorf("input path is a directory: %s", p.inputPath)
+	}
+
+	// Check file size against max_input_mb limit
+	fileSizeBytes := info.Size()
+	fileSizeMB := float64(fileSizeBytes) / 1024 / 1024
+	if fileSizeMB > float64(p.options.MaxInputMB) {
+		return fmt.Errorf("input file too large: %.2f MB (limit: %d MB)", fileSizeMB, p.options.MaxInputMB)
 	}
 
 	// Basic PDF magic bytes check
@@ -172,6 +257,32 @@ func (p *Processor) validateInput(rec *receipt.Receipt) error {
 
 	if string(header) != "%PDF-" {
 		return fmt.Errorf("file is not a valid PDF (invalid header)")
+	}
+
+	// Deep validation using pdfcpu
+	ctx, err := api.ReadContextFile(p.inputPath)
+	if err != nil {
+		// Distinguish corruption from unsupported features
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "unsupported") || strings.Contains(errMsg, "feature") {
+			return fmt.Errorf("PDF uses unsupported features: %w", err)
+		}
+		return fmt.Errorf("PDF is corrupted or invalid: %w", err)
+	}
+
+	// Validate the PDF structure
+	if err := api.ValidateContext(ctx); err != nil {
+		// Check for specific unsupported features
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "unsupported") {
+			return fmt.Errorf("PDF validation failed (unsupported): %w", err)
+		}
+		return fmt.Errorf("PDF validation failed: %w", err)
+	}
+
+	// Check if PDF is already encrypted (non-fatal, just a warning)
+	if ctx.Encrypt != nil {
+		rec.AddWarning(receipt.WarnUnsupportedPDFFeature, "Input PDF is already encrypted")
 	}
 
 	return nil

@@ -403,8 +403,13 @@ func TestE2EEncryptionDisabled(t *testing.T) {
 	policyPath := filepath.Join(tmpDir, "policy.json")
 	receiptPath := filepath.Join(tmpDir, "receipt.json")
 
-	// Create dummy input PDF
-	if err := os.WriteFile(inputPDF, []byte("%PDF-1.4\n..."), 0644); err != nil {
+	// Copy a real PDF to use as input
+	samplePDF := "../../test-pdfs/sample-input.pdf"
+	sampleData, err := os.ReadFile(samplePDF)
+	if err != nil {
+		t.Fatalf("failed to read sample PDF: %v", err)
+	}
+	if err := os.WriteFile(inputPDF, sampleData, 0644); err != nil {
 		t.Fatalf("failed to create input PDF: %v", err)
 	}
 
@@ -453,8 +458,13 @@ func TestE2EUnknownPolicyFieldWarning(t *testing.T) {
 	receiptPath := filepath.Join(tmpDir, "receipt.json")
 	inputPDF := filepath.Join(tmpDir, "input.pdf")
 
-	// Create dummy input PDF
-	if err := os.WriteFile(inputPDF, []byte("%PDF-1.4\n..."), 0644); err != nil {
+	// Copy a real PDF to use as input
+	samplePDF := "../../test-pdfs/sample-input.pdf"
+	sampleData, err := os.ReadFile(samplePDF)
+	if err != nil {
+		t.Fatalf("failed to read sample PDF: %v", err)
+	}
+	if err := os.WriteFile(inputPDF, sampleData, 0644); err != nil {
 		t.Fatalf("failed to create input PDF: %v", err)
 	}
 
@@ -497,8 +507,13 @@ func TestE2EUnknownPolicyFieldStillSucceeds(t *testing.T) {
 	inputPDF := filepath.Join(tmpDir, "input.pdf")
 	outputPDF := filepath.Join(tmpDir, "out.pdf")
 
-	// Create dummy input PDF
-	if err := os.WriteFile(inputPDF, []byte("%PDF-1.4\n..."), 0644); err != nil {
+	// Copy a real PDF to use as input
+	samplePDF := "../../test-pdfs/sample-input.pdf"
+	sampleData, err := os.ReadFile(samplePDF)
+	if err != nil {
+		t.Fatalf("failed to read sample PDF: %v", err)
+	}
+	if err := os.WriteFile(inputPDF, sampleData, 0644); err != nil {
 		t.Fatalf("failed to create input PDF: %v", err)
 	}
 
