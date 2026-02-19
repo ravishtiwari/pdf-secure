@@ -4,9 +4,14 @@ import tempfile
 from contextlib import ExitStack
 from pathlib import Path
 from beartype import beartype
-from beartype.typing import Optional, Union
+from beartype.typing import Optional, Union, List, Tuple
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from .models import Policy, Receipt
-from .exception import SecurePDFEngineException
+from .exception import (
+    SecurePDFEngineException,
+    SecurePDFException,
+    exception_from_receipt,
+)
 
 PathLike = Union[str, Path]
 
@@ -104,4 +109,80 @@ def secure_pdf(
                 "Engine produced invalid receipt JSON"
             ) from exc
 
-        return Receipt.from_dict(data)
+        receipt = Receipt.from_dict(data)
+
+        # Raise specific exception if transformation failed
+        if not receipt.ok:
+            exc = exception_from_receipt(receipt)
+            if exc:
+                raise exc
+
+        return receipt
+
+
+@beartype
+def batch_secure_pdf(
+    pdf_pairs: List[Tuple[str, str]],
+    policy: Policy,
+    engine_binary_path: str | None = None,
+    engine_options: dict | None = None,
+    max_workers: int = 4,
+) -> List[Receipt]:
+    """
+    Process multiple PDFs in parallel using a shared policy.
+
+    Args:
+        pdf_pairs: List of (input_path, output_path) tuples
+        policy: Policy to apply to all PDFs
+        engine_binary_path: Optional path to engine binary
+        engine_options: Optional engine options dict
+        max_workers: Maximum number of parallel workers (default: 4)
+
+    Returns:
+        List of Receipt objects (one per input PDF, in same order as input)
+
+    Raises:
+        SecurePDFException: If any PDF processing fails
+
+    Examples:
+        >>> pairs = [("in1.pdf", "out1.pdf"), ("in2.pdf", "out2.pdf")]
+        >>> policy = Policy(policy_version="1.0", encryption=EncryptionConfig(enabled=False))
+        >>> receipts = batch_secure_pdf(pairs, policy)
+        >>> assert len(receipts) == 2
+    """
+
+    @beartype
+    def process_one(input_path: str, output_path: str) -> Receipt:
+        """Process a single PDF."""
+        engine_bin = (
+            Path(engine_binary_path) if engine_binary_path else Path("securepdf-engine")
+        )
+        return secure_pdf(
+            input_path,
+            output_path,
+            policy,
+            engine_bin=engine_bin,
+            engine_opts=engine_options,
+        )
+
+    receipts = [None] * len(pdf_pairs)  # Preserve order
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all tasks with index to preserve order
+        future_to_index = {
+            executor.submit(process_one, inp, out): i
+            for i, (inp, out) in enumerate(pdf_pairs)
+        }
+
+        # Collect results as they complete
+        for future in as_completed(future_to_index):
+            index = future_to_index[future]
+            try:
+                receipt = future.result()
+                receipts[index] = receipt
+            except Exception as e:
+                # Re-raise with context about which file failed
+                input_path, output_path = pdf_pairs[index]
+                raise SecurePDFException(f"Failed to process {input_path}: {e}") from e
+
+    return receipts

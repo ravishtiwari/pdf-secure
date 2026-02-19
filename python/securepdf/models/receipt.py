@@ -103,3 +103,36 @@ class Receipt:
     def get_error_message(self) -> Optional[str]:
         """Get the error message if present."""
         return self.error.message if self.error else None
+
+    def to_dict(self) -> dict:
+        """Convert receipt to a dictionary."""
+        result = {
+            "ok": self.ok,
+            "engine_version": self.engine_version,
+            "policy_version": self.policy_version,
+            "warnings": [{"code": w.code, "message": w.message} for w in self.warnings],
+        }
+
+        if self.error:
+            result["error"] = {
+                "code": self.error.code,
+                "message": self.error.message,
+            }
+            if self.error.details:
+                result["error"]["details"] = self.error.details
+
+        # Add optional fields if present
+        if self.document_id:
+            result["document_id"] = self.document_id
+        if self.copy_id:
+            result["copy_id"] = self.copy_id
+        if self.input_sha256:
+            result["input_sha256"] = self.input_sha256
+        if self.output_sha256:
+            result["output_sha256"] = self.output_sha256
+        if self.input_content_hash:
+            result["input_content_hash"] = self.input_content_hash
+        if self.timestamp:
+            result["timestamp"] = self.timestamp
+
+        return result
