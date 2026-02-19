@@ -120,6 +120,7 @@ class TamperDetectionConfig:
 
     enabled: bool = True
     hash_alg: str = "sha256"  # "sha256" only in V1
+    hash_profile: str = "objects_only"  # "objects_only"|"content_streams"|"external"
 
     @classmethod
     def from_dict(cls, data: dict) -> "TamperDetectionConfig":
@@ -172,6 +173,89 @@ class Policy:
             provenance=provenance,
             tamper_detection=tamper_detection,
         )
+
+    def validate(self) -> tuple[bool, list[str]]:
+        """
+        Validate the policy configuration.
+
+        Returns:
+            Tuple of (is_valid, error_messages)
+
+        Examples:
+            >>> policy = Policy(policy_version="1.0", encryption=EncryptionConfig(enabled=True, user_password=""))
+            >>> valid, errors = policy.validate()
+            >>> assert not valid
+            >>> assert "user_password is required" in errors[0]
+        """
+        errors = []
+
+        # Check policy version
+        if not self.policy_version:
+            errors.append("policy_version is required")
+        elif self.policy_version != "1.0":
+            errors.append(
+                f"unsupported policy_version: {self.policy_version} (expected '1.0')"
+            )
+
+        # Validate encryption
+        if self.encryption and self.encryption.enabled:
+            if not self.encryption.user_password:
+                errors.append(
+                    "encryption.user_password is required when encryption is enabled"
+                )
+            if self.encryption.user_password and len(self.encryption.user_password) < 1:
+                errors.append("encryption.user_password cannot be empty")
+
+            # Validate crypto profile
+            valid_profiles = ["strong", "compat", "legacy", "auto"]
+            if (
+                self.encryption.crypto_profile
+                and self.encryption.crypto_profile not in valid_profiles
+            ):
+                errors.append(
+                    f"invalid crypto_profile: {self.encryption.crypto_profile}"
+                )
+
+        # Validate labels
+        if self.labels:
+            if self.labels.mode not in ["visible", "invisible", "off", None]:
+                errors.append(f"invalid labels.mode: {self.labels.mode}")
+
+            if self.labels.mode == "visible" and self.labels.visible:
+                if not self.labels.visible.text:
+                    errors.append("labels.visible.text is required for visible labels")
+                if (
+                    self.labels.visible.placement
+                    and self.labels.visible.placement
+                    not in ["footer", "header", "diagonal"]
+                ):
+                    errors.append(
+                        f"invalid labels.visible.placement: {self.labels.visible.placement}"
+                    )
+
+            if self.labels.mode == "invisible" and self.labels.invisible:
+                if not self.labels.invisible.enabled:
+                    errors.append(
+                        "labels.invisible.enabled must be true when mode is 'invisible'"
+                    )
+
+        # Validate provenance
+        if self.provenance and self.provenance.enabled:
+            # document_id and copy_id are optional (auto-generated if not provided)
+            pass
+
+        # Validate tamper detection
+        if self.tamper_detection and self.tamper_detection.enabled:
+            valid_profiles = ["objects_only", "content_streams", "external"]
+            if (
+                self.tamper_detection.hash_profile
+                and self.tamper_detection.hash_profile not in valid_profiles
+            ):
+                errors.append(
+                    f"invalid tamper_detection.hash_profile: {self.tamper_detection.hash_profile}"
+                )
+
+        return (len(errors) == 0, errors)
 
     def to_json(self) -> str:
         """Serialize policy to JSON string for engine consumption."""

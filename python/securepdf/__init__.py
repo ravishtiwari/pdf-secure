@@ -40,12 +40,30 @@ from .models import (
     ERR_INPUT_READ_FAILED,
     ERR_INTERNAL_ERROR,
 )
-from .sdk import secure_pdf
-from .exception import SecurePDFEngineException
+from .sdk import secure_pdf, batch_secure_pdf
+from .exception import (
+    SecurePDFException,
+    SecurePDFEngineException,
+    SecurePDFPolicyInvalidError,
+    SecurePDFInputInvalidError,
+    SecurePDFInputUnsupportedError,
+    SecurePDFEncryptionError,
+    SecurePDFLabelError,
+    SecurePDFProvenanceError,
+    SecurePDFTamperHashError,
+    SecurePDFOutputError,
+    SecurePDFTimeoutError,
+    SecurePDFMemoryLimitError,
+    SecurePDFInputReadError,
+    SecurePDFWeakCryptoRejectedError,
+    SecurePDFInternalError,
+    exception_from_receipt,
+)
 
 __all__ = [
-    # Main function
+    # Main functions
     "secure_pdf",
+    "batch_secure_pdf",
     # Policy dataclasses
     "Policy",
     "EncryptionConfig",
@@ -82,5 +100,20 @@ __all__ = [
     "ERR_INPUT_READ_FAILED",
     "ERR_INTERNAL_ERROR",
     # Exceptions
+    "SecurePDFException",
     "SecurePDFEngineException",
+    "SecurePDFPolicyInvalidError",
+    "SecurePDFInputInvalidError",
+    "SecurePDFInputUnsupportedError",
+    "SecurePDFEncryptionError",
+    "SecurePDFLabelError",
+    "SecurePDFProvenanceError",
+    "SecurePDFTamperHashError",
+    "SecurePDFOutputError",
+    "SecurePDFTimeoutError",
+    "SecurePDFMemoryLimitError",
+    "SecurePDFInputReadError",
+    "SecurePDFWeakCryptoRejectedError",
+    "SecurePDFInternalError",
+    "exception_from_receipt",
 ]

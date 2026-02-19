@@ -398,3 +398,37 @@ class TestWarningAndErrorCodes:
         """Test that error codes follow the E### format."""
         assert ERR_POLICY_INVALID.startswith("E")
         assert ERR_ENCRYPTION_FAILED.startswith("E")
+
+
+class TestPolicyValidation:
+    """Tests for Policy.validate() method."""
+
+    def test_policy_validate_catches_missing_password(self):
+        """Test that validate() catches missing password."""
+        policy = Policy(
+            policy_version="1.0",
+            encryption=EncryptionConfig(enabled=True, user_password=""),
+        )
+        valid, errors = policy.validate()
+        assert not valid
+        assert any("password" in err.lower() for err in errors)
+
+    def test_policy_validate_accepts_valid(self):
+        """Test that validate() accepts valid policy."""
+        policy = Policy(
+            policy_version="1.0",
+            encryption=EncryptionConfig(enabled=True, user_password="secret123"),
+        )
+        valid, errors = policy.validate()
+        assert valid, f"Policy should be valid, got errors: {errors}"
+        assert len(errors) == 0
+
+    def test_policy_validate_catches_invalid_version(self):
+        """Test that validate() catches invalid version."""
+        policy = Policy(
+            policy_version="2.0",  # Unsupported
+            encryption=EncryptionConfig(enabled=False),
+        )
+        valid, errors = policy.validate()
+        assert not valid
+        assert any("version" in err.lower() for err in errors)
