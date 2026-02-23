@@ -62,7 +62,7 @@ def main():
             else:
                 policy = policy_data
 
-            # Parse engine options
+            # Parse engine options (keep values as strings — engine handles parsing)
             engine_options = {}
             if args.engine_opt:
                 for opt in args.engine_opt:
@@ -73,16 +73,6 @@ def main():
                         )
                         sys.exit(1)
                     key, value = opt.split("=", 1)
-                    # Try to parse value as bool/int/float
-                    if value.lower() in ("true", "false"):
-                        value = value.lower() == "true"
-                    elif value.isdigit():
-                        value = int(value)
-                    else:
-                        try:
-                            value = float(value)
-                        except ValueError:
-                            pass  # Keep as string
                     engine_options[key] = value
 
             # Prepare secure_pdf arguments

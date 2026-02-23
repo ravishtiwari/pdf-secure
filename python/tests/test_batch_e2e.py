@@ -1,52 +1,68 @@
 """E2E tests for batch_secure_pdf."""
 
-import pytest
+from __future__ import annotations
+
 from pathlib import Path
+
+import pytest
+
 from securepdf import batch_secure_pdf, Policy, EncryptionConfig
 
 
-def test_batch_secure_pdf_e2e(tmp_path):
-    """Test batch processing of multiple PDFs."""
-    # Create 3 input PDFs (copy from test fixture)
-    sample_pdf = Path(__file__).parent.parent.parent / "test-pdfs" / "sample-input.pdf"
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[2]
 
+
+def _engine_bin() -> Path:
+    return _repo_root() / "bin" / "securepdf-engine"
+
+
+def _sample_input() -> Path:
+    return _repo_root() / "engine" / "test-pdfs" / "sample-input.pdf"
+
+
+@pytest.mark.skipif(
+    not _engine_bin().exists(),
+    reason="securepdf-engine binary missing; build it before running this test",
+)
+def test_batch_secure_pdf_e2e(tmp_path: Path) -> None:
+    """Test batch processing of multiple PDFs."""
     pairs = []
     for i in range(3):
         input_pdf = tmp_path / f"input_{i}.pdf"
         output_pdf = tmp_path / f"output_{i}.pdf"
-        input_pdf.write_bytes(sample_pdf.read_bytes())
+        input_pdf.write_bytes(_sample_input().read_bytes())
         pairs.append((str(input_pdf), str(output_pdf)))
 
-    # Create policy
     policy = Policy(policy_version="1.0", encryption=EncryptionConfig(enabled=False))
 
-    # Process batch
-    receipts = batch_secure_pdf(pairs, policy, max_workers=2)
+    receipts = batch_secure_pdf(
+        pairs, policy, engine_binary_path=str(_engine_bin()), max_workers=2
+    )
 
-    # Verify results
     assert len(receipts) == 3
     for i, receipt in enumerate(receipts):
         assert receipt.ok, f"Receipt {i} failed: {receipt.error}"
-        output_pdf = Path(pairs[i][1])
-        assert output_pdf.exists(), f"Output {i} was not created"
+        assert Path(pairs[i][1]).exists(), f"Output {i} was not created"
 
 
-def test_batch_preserves_order(tmp_path):
+@pytest.mark.skipif(
+    not _engine_bin().exists(),
+    reason="securepdf-engine binary missing; build it before running this test",
+)
+def test_batch_preserves_order(tmp_path: Path) -> None:
     """Test that batch_secure_pdf preserves input order."""
-    sample_pdf = Path(__file__).parent.parent.parent / "test-pdfs" / "sample-input.pdf"
-
     pairs = []
     for i in range(5):
         input_pdf = tmp_path / f"input_{i}.pdf"
         output_pdf = tmp_path / f"output_{i}.pdf"
-        input_pdf.write_bytes(sample_pdf.read_bytes())
+        input_pdf.write_bytes(_sample_input().read_bytes())
         pairs.append((str(input_pdf), str(output_pdf)))
 
     policy = Policy(policy_version="1.0", encryption=EncryptionConfig(enabled=False))
 
-    receipts = batch_secure_pdf(pairs, policy)
+    receipts = batch_secure_pdf(pairs, policy, engine_binary_path=str(_engine_bin()))
 
-    # Verify order by checking output_sha256 matches expected file
     assert len(receipts) == 5
-    for i, receipt in enumerate(receipts):
+    for receipt in receipts:
         assert receipt.ok
