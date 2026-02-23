@@ -91,31 +91,31 @@ def secure_pdf(
                 f"Failed to execute engine binary: {e}"
             ) from e
 
-        if result.returncode != 0:
-            raise SecurePDFEngineException(
-                "Engine exited with code "
-                f"{result.returncode}. Stderr: {result.stderr.strip()}"
-            )
+        # Always try to read receipt first — engine writes it even on failure.
+        # This allows typed exceptions to be raised based on the error code.
+        receipt: Optional[Receipt] = None
+        if receipt_path.exists():
+            try:
+                data = json.loads(receipt_path.read_text(encoding="utf-8"))
+                receipt = Receipt.from_dict(data)
+            except (json.JSONDecodeError, Exception):
+                pass  # Fall through to generic error below
 
-        if not receipt_path.exists():
-            raise SecurePDFEngineException(
-                f"Engine failed to produce receipt. Stderr: {result.stderr.strip()}"
-            )
-
-        try:
-            data = json.loads(receipt_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as exc:
-            raise SecurePDFEngineException(
-                "Engine produced invalid receipt JSON"
-            ) from exc
-
-        receipt = Receipt.from_dict(data)
-
-        # Raise specific exception if transformation failed
-        if not receipt.ok:
+        if receipt is not None and not receipt.ok:
             exc = exception_from_receipt(receipt)
             if exc:
                 raise exc
+
+        if result.returncode != 0:
+            raise SecurePDFEngineException(
+                f"Engine exited with code {result.returncode}. "
+                f"Stderr: {result.stderr.strip()}"
+            )
+
+        if receipt is None:
+            raise SecurePDFEngineException(
+                f"Engine failed to produce receipt. Stderr: {result.stderr.strip()}"
+            )
 
         return receipt
 
