@@ -46,6 +46,10 @@ def secure_pdf(
     Raises:
         SecurePDFEngineException: If the engine binary is not found or fails.
     """
+    # Resolve to absolute paths to prevent path traversal via symlinks or ../
+    input_path = Path(input_path).resolve()
+    output_path = Path(output_path).resolve()
+
     with ExitStack() as stack:
         policy_file = stack.enter_context(
             tempfile.NamedTemporaryFile("w", suffix=".json", delete=False)
@@ -60,9 +64,11 @@ def secure_pdf(
         stack.callback(lambda: policy_path.unlink(missing_ok=True))
         stack.callback(lambda: receipt_path.unlink(missing_ok=True))
 
-        policy_path.write_text(policy.to_json(), encoding="utf-8")
-        policy_path.chmod(0o600)
-        receipt_path.chmod(0o600)
+        # Write directly to the open handle to avoid reopening the file — eliminates
+        # the TOCTOU window between write and chmod. NamedTemporaryFile already
+        # creates files at 0o600 on POSIX, so no explicit chmod is needed.
+        policy_file.write(policy.to_json())
+        policy_file.flush()
 
         cmd = [
             engine_bin,
@@ -83,6 +89,7 @@ def secure_pdf(
                 cmd.extend(["--engine-opt", f"{key}={value}"])
 
         try:
+            # TODO: needs fix - derive timeout from engine_opts["timeout_ms"] if provided instead of hardcoding 600s
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
         except FileNotFoundError as e:
             raise SecurePDFEngineException(

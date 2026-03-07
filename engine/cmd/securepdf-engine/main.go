@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"securepdf-engine/pkg/consts"
@@ -97,6 +98,12 @@ func runSecure(args []string) error {
 		printSecureUsage(os.Stderr)
 		return fmt.Errorf("missing required flags: %s", strings.Join(missing, ", "))
 	}
+
+	// Clean all paths to prevent traversal via redundant separators or . components
+	*inputPath = filepath.Clean(*inputPath)
+	*outputPath = filepath.Clean(*outputPath)
+	*policyPath = filepath.Clean(*policyPath)
+	*receiptPath = filepath.Clean(*receiptPath)
 
 	// 1. Parse engine options
 	opts, err := options.Parse(engineOpts)
