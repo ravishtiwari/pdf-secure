@@ -7,11 +7,11 @@ from pathlib import Path
 import pytest
 
 from securepdf import (
-    secure_pdf,
-    Policy,
     EncryptionConfig,
-    SecurePDFPolicyInvalidError,
+    Policy,
     SecurePDFInputInvalidError,
+    SecurePDFPolicyInvalidError,
+    secure_pdf,
 )
 
 

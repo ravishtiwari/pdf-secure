@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from securepdf import batch_secure_pdf, Policy, EncryptionConfig
+from securepdf import EncryptionConfig, Policy, batch_secure_pdf
 
 
 def _repo_root() -> Path:

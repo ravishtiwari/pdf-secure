@@ -1,17 +1,19 @@
 import json
 import subprocess
 import tempfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import ExitStack
 from pathlib import Path
+
 from beartype import beartype
-from beartype.typing import Optional, Union, List, Tuple
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from .models import Policy, Receipt
+from beartype.typing import List, Optional, Tuple, Union
+
 from .exception import (
     SecurePDFEngineException,
     SecurePDFException,
     exception_from_receipt,
 )
+from .models import Policy, Receipt
 
 PathLike = Union[str, Path]
 
@@ -90,8 +92,8 @@ def secure_pdf(
             ) from e
         except subprocess.TimeoutExpired:
             raise SecurePDFEngineException(
-                f"Engine execution timed out after 600 seconds.\n"
-                f"Consider using engine option timeout_ms to adjust processing timeout."
+                "Engine execution timed out after 600 seconds.\n"
+                "Consider using engine option timeout_ms to adjust processing timeout."
             )
         except OSError as e:
             raise SecurePDFEngineException(

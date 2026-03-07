@@ -1,15 +1,10 @@
 """Policy models for SecurePDF V1 schema."""
 
-from enum import Enum
 import json
-from dataclasses import dataclass, asdict, field
-from beartype import beartype
+from dataclasses import asdict, dataclass, field
 from typing import Optional
 
-
-class LabelsConfig(str, Enum):
-    PLACEMENT_HEADER: str = "header"
-    PLACEMENT_FOOTER: str = "footer"
+from beartype import beartype
 
 
 @beartype
