@@ -1,5 +1,6 @@
+"""Encryption test command."""
+
 import json
-import os
 import sys
 from pathlib import Path
 from typing import List, Optional
@@ -9,33 +10,21 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-# Add the python directory to the path so we can import securepdf
-sys.path.append(str(Path(__file__).parent.parent / "python"))
+# Add parent directories to path
+SCRIPT_DIR = Path(__file__).resolve().parent.parent.parent
+REPO_ROOT = SCRIPT_DIR.parent
+PYTHON_DIR = REPO_ROOT / "python"
+sys.path.insert(0, str(PYTHON_DIR))
 
-from securepdf import Policy, secure_pdf, SecurePDFEngineException
+from securepdf import Policy, SecurePDFEngineException, secure_pdf
+from securepdf.models import EncryptionConfig, LabelsConfig, VisibleLabel
 
-app = typer.Typer(
-    help="SecurePDF Encryption Test Tool - Test encryption with real PDF files.",
-    add_completion=False,
-)
+from ..utils import parse_engine_opts
+
 console = Console()
 
 
-def parse_engine_opts(opts: List[str]) -> dict[str, str]:
-    """Parse engine options from key=value format."""
-    result = {}
-    for opt in opts:
-        if "=" not in opt:
-            raise typer.BadParameter(
-                f"Engine option must be in key=value format: {opt}"
-            )
-        key, value = opt.split("=", 1)
-        result[key.strip()] = value.strip()
-    return result
-
-
-@app.command()
-def secure(
+def encryption_command(
     input_path: Path = typer.Option(
         ...,
         "--in",
@@ -73,32 +62,27 @@ def secure(
         None,
         "--engine-opt",
         "-e",
-        help="Runtime options for the engine as key=value pairs (can be specified multiple times). e.g. reject_weak_crypto=true",
+        help="Runtime options as key=value pairs (repeatable).",
     ),
 ):
-    """
-    Secures a PDF using the SecurePDF Go engine.
+    """Test PDF encryption using the SecurePDF Go engine.
 
-    Acceptable engine options:
-    - reject_weak_crypto: "true" or "false" (reject weak crypto profiles)
-    - timeout_ms: Timeout in milliseconds (e.g., "60000")
-    - max_input_mb: Maximum input file size in MB (e.g., "200")
-    - max_memory_mb: Maximum memory usage in MB (e.g., "512")
+    Engine options:
+    - reject_weak_crypto: "true" or "false"
+    - timeout_ms: Timeout in milliseconds
+    - max_input_mb: Maximum input file size in MB
+    - max_memory_mb: Maximum memory usage in MB
     """
-
-    # Load policy from JSON
+    # Load policy
     try:
         policy_data = json.loads(policy_path.read_text(encoding="utf-8"))
 
-        # Supporting legacy format conversion as seen in E2E tests
+        # Legacy format conversion
         if "policy_version" not in policy_data and "encryption" not in policy_data:
-            # Simple conversion if it's very legacy
             policy = Policy()
             if "password" in policy_data:
                 policy.encryption.user_password = policy_data["password"]
             if "visible_label" in policy_data:
-                from securepdf.models import LabelsConfig, VisibleLabel
-
                 policy.labels = LabelsConfig(
                     mode="visible",
                     visible=VisibleLabel(text=policy_data["visible_label"]),
@@ -112,7 +96,7 @@ def secure(
 
     parsed_opts = parse_engine_opts(engine_opts) if engine_opts else {}
 
-    console.print(f"[bold blue]Submitting transformation...[/bold blue]")
+    console.print("[bold blue]Submitting transformation...[/bold blue]")
     console.print(f"  Input:  {input_path}")
     console.print(f"  Output: {output_path}")
     console.print(f"  Policy: {policy_path}")
@@ -137,12 +121,8 @@ def secure(
         raise typer.Exit(code=1)
 
     # Display results
-    if receipt.ok:
-        status_color = "green"
-        status_text = "SUCCESS"
-    else:
-        status_color = "red"
-        status_text = "FAILED"
+    status_color = "green" if receipt.ok else "red"
+    status_text = "SUCCESS" if receipt.ok else "FAILED"
 
     console.print(
         Panel(
@@ -177,7 +157,3 @@ def secure(
         if receipt.output_sha256:
             info_table.add_row("Output SHA256", receipt.output_sha256)
         console.print(info_table)
-
-
-if __name__ == "__main__":
-    app()

@@ -84,11 +84,19 @@ def secure_pdf(
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
         except FileNotFoundError as e:
             raise SecurePDFEngineException(
-                f"Engine binary not found: {engine_bin}"
+                f"Engine binary not found: {engine_bin}\n"
+                f"Please ensure the securepdf-engine binary is installed and in your PATH,\n"
+                f"or specify the path with --engine-bin or engine_bin parameter."
             ) from e
+        except subprocess.TimeoutExpired:
+            raise SecurePDFEngineException(
+                f"Engine execution timed out after 600 seconds.\n"
+                f"Consider using engine option timeout_ms to adjust processing timeout."
+            )
         except OSError as e:
             raise SecurePDFEngineException(
-                f"Failed to execute engine binary: {e}"
+                f"Failed to execute engine binary: {e}\n"
+                f"Please check file permissions and ensure the binary is executable."
             ) from e
 
         # Always try to read receipt first — engine writes it even on failure.
@@ -107,14 +115,19 @@ def secure_pdf(
                 raise exc
 
         if result.returncode != 0:
+            stderr = result.stderr.strip() if result.stderr else "No error output"
             raise SecurePDFEngineException(
-                f"Engine exited with code {result.returncode}. "
-                f"Stderr: {result.stderr.strip()}"
+                f"Engine exited with code {result.returncode}.\n"
+                f"Error output: {stderr}\n"
+                f"Check the receipt file for detailed error information."
             )
 
         if receipt is None:
+            stderr = result.stderr.strip() if result.stderr else "No error output"
             raise SecurePDFEngineException(
-                f"Engine failed to produce receipt. Stderr: {result.stderr.strip()}"
+                f"Engine failed to produce receipt.\n"
+                f"Error output: {stderr}\n"
+                f"This usually indicates a critical engine failure."
             )
 
         return receipt
