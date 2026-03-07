@@ -1,5 +1,13 @@
 class SecurePDFException(Exception):
-    pass
+    """Base exception for SecurePDF operations.
+
+    Attributes:
+        receipt: Optional Receipt object if available
+    """
+
+    def __init__(self, message, receipt=None):
+        super().__init__(message)
+        self.receipt = receipt
 
 
 class SecurePDFPolicyException(SecurePDFException):
@@ -104,14 +112,14 @@ def exception_from_receipt(receipt):
         receipt: Receipt object with error details
 
     Returns:
-        Appropriate exception instance based on error code
+        Appropriate exception instance based on error code, with receipt attached
     """
     if receipt.ok:
         return None
 
     if not receipt.error:
         return SecurePDFException(
-            "Unknown error: receipt.ok=false but no error details"
+            "Unknown error: receipt.ok=false but no error details", receipt=receipt
         )
 
     error_code = receipt.error.code
@@ -135,4 +143,4 @@ def exception_from_receipt(receipt):
     }
 
     exception_class = error_map.get(error_code, SecurePDFException)
-    return exception_class(message)
+    return exception_class(message, receipt=receipt)

@@ -1,24 +1,48 @@
-#!/usr/bin/env python3
-from __future__ import annotations
+"""Foundation verification command."""
 
 from dataclasses import dataclass
 from pathlib import Path
 
+import typer
+from rich.console import Console
+from rich.table import Table
+
+console = Console()
+
 
 @dataclass(frozen=True)
 class CheckResult:
+    """Result of a foundation check."""
+
     name: str
     ok: bool
     detail: str
 
 
 def has_files_with_extension(path: Path, extension: str) -> bool:
+    """Check if directory has files with given extension.
+
+    Args:
+        path: Directory to check
+        extension: File extension (e.g., ".go")
+
+    Returns:
+        True if files with extension exist
+    """
     if not path.exists() or not path.is_dir():
         return False
     return any(path.glob(f"*{extension}"))
 
 
 def run_checks(root: Path) -> list[CheckResult]:
+    """Run foundation verification checks.
+
+    Args:
+        root: Repository root directory
+
+    Returns:
+        List of check results
+    """
     checks: list[CheckResult] = []
 
     def add_check(name: str, ok: bool, detail: str) -> None:
@@ -71,7 +95,7 @@ def run_checks(root: Path) -> list[CheckResult]:
     )
 
     add_check(
-        "Python package skeleton",
+        "Python package",
         has_files_with_extension(python_dir / "securepdf", ".py"),
         "python/securepdf/*.py",
     )
@@ -79,26 +103,38 @@ def run_checks(root: Path) -> list[CheckResult]:
     return checks
 
 
-def main() -> int:
-    root = Path(__file__).resolve().parent.parent
-    checks = run_checks(root)
+def foundation_command():
+    """Verify that the SecurePDF foundation is properly set up.
 
-    print("Foundation verification")
+    Checks for required directories, files, and module structure.
+    """
+    # Find repo root
+    script_dir = Path(__file__).resolve().parent.parent.parent
+    repo_root = script_dir.parent
+
+    checks = run_checks(repo_root)
+
+    console.print("[bold]Foundation Verification[/bold]\n")
+
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Status", width=8)
+    table.add_column("Check")
+    table.add_column("Detail", style="dim")
+
     failures = 0
-
     for check in checks:
-        status = "PASS" if check.ok else "FAIL"
-        print(f"{status}: {check.name} ({check.detail})")
-        if not check.ok:
+        if check.ok:
+            status = "[green]PASS[/green]"
+        else:
+            status = "[red]FAIL[/red]"
             failures += 1
 
+        table.add_row(status, check.name, check.detail)
+
+    console.print(table)
+
     if failures:
-        print(f"\n{failures} check(s) failed.")
-        return 1
+        console.print(f"\n[bold red]{failures} check(s) failed.[/bold red]")
+        raise typer.Exit(code=1)
 
-    print("\nAll foundation checks passed.")
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+    console.print("\n[bold green]✓ All foundation checks passed.[/bold green]")

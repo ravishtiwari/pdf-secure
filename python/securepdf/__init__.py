@@ -3,6 +3,8 @@
 A Python wrapper for the SecurePDF Go engine providing PDF security operations.
 """
 
+__version__ = "0.0.1"
+
 from .models import (
     # Policy dataclasses
     Policy,
@@ -61,6 +63,8 @@ from .exception import (
 )
 
 __all__ = [
+    # Version
+    "__version__",
     # Main functions
     "secure_pdf",
     "batch_secure_pdf",
