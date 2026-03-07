@@ -13,12 +13,11 @@ Examples:
 """
 
 import argparse
-import sys
 import json
+import sys
 from pathlib import Path
 
-from securepdf import secure_pdf, Policy, __version__
-from securepdf.models.receipt import Receipt
+from securepdf import Policy, __version__, secure_pdf
 from securepdf.exception import SecurePDFException
 
 
@@ -137,7 +136,7 @@ Supported options:
                 print(
                     f"❌ Error: Input PDF file not found: {args.input}", file=sys.stderr
                 )
-                print(f"   Please check the file path and try again.", file=sys.stderr)
+                print("   Please check the file path and try again.", file=sys.stderr)
                 sys.exit(3)
 
             # Load policy from JSON file
@@ -147,7 +146,7 @@ Supported options:
                     f"❌ Error: Policy file not found: {args.policy}", file=sys.stderr
                 )
                 print(
-                    f"   Create a policy.json file or check the path.", file=sys.stderr
+                    "   Create a policy.json file or check the path.", file=sys.stderr
                 )
                 sys.exit(2)
 
@@ -170,7 +169,7 @@ Supported options:
                             file=sys.stderr,
                         )
                         print(
-                            f"   Expected format: key=value (e.g., reject_weak_crypto=true)",
+                            "   Expected format: key=value (e.g., reject_weak_crypto=true)",
                             file=sys.stderr,
                         )
                         sys.exit(1)
@@ -202,7 +201,7 @@ Supported options:
 
             # Print success
             if receipt.ok:
-                print(f"✅ PDF secured successfully!")
+                print("✅ PDF secured successfully!")
                 print(f"   Input:   {args.input}")
                 print(f"   Output:  {args.output}")
                 print(f"   Receipt: {args.receipt}")
@@ -226,7 +225,7 @@ Supported options:
                         file=sys.stderr,
                     )
                     if receipt.error.details:
-                        print(f"   Details:", file=sys.stderr)
+                        print("   Details:", file=sys.stderr)
                         for k, v in receipt.error.details.items():
                             print(f"     {k}: {v}", file=sys.stderr)
                 print(f"\n   Receipt saved to: {args.receipt}", file=sys.stderr)
@@ -248,7 +247,7 @@ Supported options:
             print(f"❌ Error: File not found: {e}", file=sys.stderr)
             sys.exit(3)
         except json.JSONDecodeError as e:
-            print(f"❌ Error: Invalid JSON in policy file", file=sys.stderr)
+            print("❌ Error: Invalid JSON in policy file", file=sys.stderr)
             print(f"   {e}", file=sys.stderr)
             sys.exit(2)
         except KeyboardInterrupt:
@@ -256,7 +255,7 @@ Supported options:
             sys.exit(130)
         except Exception as e:
             print(f"❌ Unexpected error: {e}", file=sys.stderr)
-            print(f"   Please report this issue if it persists.", file=sys.stderr)
+            print("   Please report this issue if it persists.", file=sys.stderr)
             sys.exit(1)
 
 
