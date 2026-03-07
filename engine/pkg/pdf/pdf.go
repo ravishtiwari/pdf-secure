@@ -106,7 +106,9 @@ func (p *Processor) Process() (*receipt.Receipt, error) {
 	if err := p.copyFile(p.inputPath, workingPath); err != nil {
 		return receipt.NewError(consts.EngineVersion, p.policy.PolicyVersion, receipt.ErrInternalError, fmt.Sprintf("failed to create working file: %v", err)), err
 	}
-	defer os.Remove(workingPath) // Clean up temp file
+	// Working file created at 0o600 (owner-only) via copyFile; defer cleans up on normal exit.
+	// On SIGKILL the file may persist, but its 0o600 permissions protect it from other users.
+	defer os.Remove(workingPath)
 
 	// Check timeout after copying
 	if err := p.checkTimeout(ctx); err != nil {
@@ -212,7 +214,7 @@ func (p *Processor) checkTimeout(ctx context.Context) error {
 }
 
 // checkMemory checks if the processing has exceeded the memory limit.
-// This is a best-effort check using Go's runtime stats.
+// TODO: needs fix - runtime.MemStats.Alloc only covers Go heap; use OS-level setrlimit for a true hard limit
 func (p *Processor) checkMemory() error {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
