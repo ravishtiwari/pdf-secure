@@ -42,7 +42,7 @@ PDF + Policy → [ Go Engine ] → Secured PDF + Receipt (JSON)
 
 - **AES-256 Encryption** (default): Industry-standard strong encryption
 - **AES-128 Compatibility Mode**: For broader viewer support
-- **RC4-128 Legacy Mode**: For legacy systems (with warnings)
+- **RC4-128 (deprecated)**: Retained for legacy interoperability only; RC4 is a broken cipher and must not be used to protect confidential documents — emits W001 warning on use
 - **PBKDF2 Key Derivation**: Secure password-based encryption
 - **Configurable Permissions**: Control print, copy, and modify access
 - **Weak Crypto Warnings**: Automatic alerts when using legacy encryption

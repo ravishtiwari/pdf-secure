@@ -51,7 +51,7 @@ PDF + Policy → [ Go Engine ] → Secured PDF + Receipt (JSON)
 
 ### 🔐 Security
 - **AES-256 Encryption** (default) with PBKDF2 key derivation
-- **AES-128 & RC4-128** compatibility modes (with warnings)
+- **AES-128** compatibility mode for broader viewer support
 - **Configurable Permissions**: Print, copy, modify controls
 - **Weak Crypto Warnings**: Automatic alerts for legacy encryption
 
@@ -86,7 +86,7 @@ PDF + Policy → [ Go Engine ] → Secured PDF + Receipt (JSON)
 ```bash
 # Clone repository
 git clone https://github.com/ravishtiwari/pdf-secure.git
-cd securepdf
+cd pdf-secure
 
 # Build Go Engine
 cd engine
@@ -190,7 +190,7 @@ make py-unit-tests py-e2e-tests
 ```
 
 **Coverage:**
-- ✅ All encryption modes (AES-256, AES-128, RC4-128)
+- ✅ All encryption modes (AES-256, AES-128; RC4-128 deprecated)
 - ✅ All labeling features (visible + invisible)
 - ✅ Provenance tracking (auto + custom IDs)
 - ✅ Tamper detection (all hash profiles)
@@ -203,7 +203,7 @@ make py-unit-tests py-e2e-tests
 ## 🛣️ Roadmap
 
 ### ✅ V1.0 (Released: v0.0.1)
-- Encryption (AES-256/128, RC4-128)
+- Encryption (AES-256/128)
 - Labels (visible + invisible)
 - Provenance tracking
 - Tamper detection

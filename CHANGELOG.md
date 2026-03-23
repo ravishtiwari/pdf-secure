@@ -12,9 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 #### Core Features
-- **PDF Encryption**: AES-256 (strong), AES-128 (compat), and RC4-128 (legacy) encryption support
+- **PDF Encryption**: AES-256 (strong) and AES-128 (compat) encryption support
 - **Password Protection**: PBKDF2 key derivation with configurable iteration counts
-- **Crypto Profiles**: `strong` (AES-256, default), `compat` (AES-128), `legacy` (RC4-128), `auto` (maps to strong)
+- **Crypto Profiles**: `strong` (AES-256, default), `compat` (AES-128), `auto` (maps to strong); `legacy` (RC4-128) is deprecated and insecure — not recommended for confidential documents
 - **PDF Permissions**: Configurable print, copy, and modify permissions for encrypted PDFs
 - **Visible Labels**: Header and footer overlays with page filtering (all/first/range)
 - **Invisible Labels**: Metadata-based labeling with custom namespace support
@@ -94,8 +94,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Developer Tools
 - **Pre-commit Hooks**: gofmt, go vet, black, pytest, trailing whitespace, YAML check
 - **Makefile**: Build, test, and lint automation
-- **Test CLI**: Unified test tool (`scripts/test.py`) for encryption, provenance, and foundation verification
-- **Modular Test CLI**: New refactored test CLI (`scripts/test_new.py`) with lazy loading
+- **Modular Test CLI**: Refactored test CLI (`scripts/test.py`) with lazy loading and modular command structure
 
 ### Changed
 - **Default Crypto Profile**: Set to `strong` (AES-256) for maximum security
