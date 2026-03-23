@@ -113,6 +113,11 @@ jobs:
           pip install -e .
           pip install pytest pytest-cov
 
+      - name: Set up Go (for engine build)
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.0'
+
       - name: Build Go engine (for E2E tests)
         working-directory: ./engine
         run: |

@@ -150,7 +150,7 @@ The policy defines all security settings for PDF transformation.
 - `mode` (string): `"password"` (only supported mode in v0.0.1)
 - `user_password` (string, required if enabled): Password for opening PDF
 - `owner_password` (string, optional): Admin password for changing permissions
-- `crypto_profile` (string): `"strong"` (AES-256), `"compat"` (AES-128), `"legacy"` (RC4-128), `"auto"` (maps to strong)
+- `crypto_profile` (string): `"strong"` (AES-256, default), `"compat"` (AES-128), `"auto"` (maps to strong); `"legacy"` (RC4-128) is deprecated — RC4 is a broken cipher, do not use for confidential documents
 - `allow_print` (bool): Allow printing (default: true)
 - `allow_copy` (bool): Allow text copying (default: true)
 - `allow_modify` (bool): Allow modifications (default: false)
