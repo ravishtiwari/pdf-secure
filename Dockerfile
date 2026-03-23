@@ -32,7 +32,7 @@ RUN pip install --no-cache-dir -e . && \
     rm -rf /root/.cache/pip
 
 # Smoke test — verifies both the binary and SDK are functional
-RUN securepdf-engine --version && python -m securepdf --version
+RUN securepdf-engine --help > /dev/null && python -m securepdf --version
 
 ENTRYPOINT ["python", "-m", "securepdf"]
 CMD ["--help"]
