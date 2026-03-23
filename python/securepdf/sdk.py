@@ -1,5 +1,6 @@
 import json
 import subprocess
+import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import ExitStack
@@ -18,12 +19,21 @@ from .models import Policy, Receipt
 PathLike = Union[str, Path]
 
 
+def _find_engine_bin() -> Path:
+    """Return engine binary path: bundled in package first, then PATH fallback."""
+    binary = "securepdf-engine.exe" if sys.platform == "win32" else "securepdf-engine"
+    bundled = Path(__file__).parent / "bin" / binary
+    if bundled.exists():
+        return bundled
+    return Path(binary)
+
+
 @beartype
 def secure_pdf(
     input_path: PathLike,
     output_path: PathLike,
     policy: Policy,
-    engine_bin: PathLike = Path("securepdf-engine"),
+    engine_bin: Optional[PathLike] = None,
     engine_opts: Optional[dict[str, str]] = None,
 ) -> Receipt:
     """Secures a PDF using the Go engine.
@@ -46,6 +56,9 @@ def secure_pdf(
     Raises:
         SecurePDFEngineException: If the engine binary is not found or fails.
     """
+    # Resolve engine binary: use bundled binary if available, else fall back to PATH
+    resolved_bin = Path(engine_bin) if engine_bin is not None else _find_engine_bin()
+
     # Resolve to absolute paths to prevent path traversal via symlinks or ../
     input_path = Path(input_path).resolve()
     output_path = Path(output_path).resolve()
@@ -71,7 +84,7 @@ def secure_pdf(
         policy_file.flush()
 
         cmd = [
-            engine_bin,
+            resolved_bin,
             "secure",
             "--in",
             input_path,
@@ -93,7 +106,7 @@ def secure_pdf(
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
         except FileNotFoundError as e:
             raise SecurePDFEngineException(
-                f"Engine binary not found: {engine_bin}\n"
+                f"Engine binary not found: {resolved_bin}\n"
                 f"Please ensure the securepdf-engine binary is installed and in your PATH,\n"
                 f"or specify the path with --engine-bin or engine_bin parameter."
             ) from e
