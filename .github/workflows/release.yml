@@ -1,0 +1,260 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  # ─── Build Go engine for all target platforms ────────────────────────────
+  build-engine:
+    name: Build Engine (${{ matrix.goos }}/${{ matrix.goarch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            runner: ubuntu-latest
+            binary: securepdf-engine
+            artifact: engine-linux-amd64
+          - goos: linux
+            goarch: arm64
+            runner: ubuntu-latest
+            binary: securepdf-engine
+            artifact: engine-linux-arm64
+          - goos: darwin
+            goarch: amd64
+            runner: macos-13
+            binary: securepdf-engine
+            artifact: engine-darwin-amd64
+          - goos: darwin
+            goarch: arm64
+            runner: macos-latest
+            binary: securepdf-engine
+            artifact: engine-darwin-arm64
+          - goos: windows
+            goarch: amd64
+            runner: windows-latest
+            binary: securepdf-engine.exe
+            artifact: engine-windows-amd64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.0'
+          cache-dependency-path: engine/go.sum
+
+      - name: Build engine
+        working-directory: ./engine
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '0'
+        run: go build -ldflags="-s -w" -o ../bin/${{ matrix.binary }} ./cmd/securepdf-engine
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: bin/${{ matrix.binary }}
+
+  # ─── Build platform-specific Python wheels ───────────────────────────────
+  build-wheels:
+    name: Build Wheel (${{ matrix.goos }}/${{ matrix.goarch }})
+    needs: build-engine
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            runner: ubuntu-latest
+            binary: securepdf-engine
+            artifact: engine-linux-amd64
+            wheel_plat: manylinux_2_17_x86_64
+          - goos: linux
+            goarch: arm64
+            runner: ubuntu-latest
+            binary: securepdf-engine
+            artifact: engine-linux-arm64
+            wheel_plat: manylinux_2_17_aarch64
+          - goos: darwin
+            goarch: amd64
+            runner: macos-13
+            binary: securepdf-engine
+            artifact: engine-darwin-amd64
+            wheel_plat: macosx_10_15_x86_64
+          - goos: darwin
+            goarch: arm64
+            runner: macos-latest
+            binary: securepdf-engine
+            artifact: engine-darwin-arm64
+            wheel_plat: macosx_11_0_arm64
+          - goos: windows
+            goarch: amd64
+            runner: windows-latest
+            binary: securepdf-engine.exe
+            artifact: engine-windows-amd64
+            wheel_plat: win_amd64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Download engine binary
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: python/securepdf/bin/
+
+      - name: Make binary executable (Unix)
+        if: matrix.goos != 'windows'
+        run: chmod +x python/securepdf/bin/${{ matrix.binary }}
+
+      - name: Install build tools
+        run: pip install build wheel
+
+      - name: Build wheel
+        working-directory: ./python
+        run: python -m build --wheel --no-isolation
+
+      - name: Retag wheel with platform tag
+        working-directory: ./python
+        run: |
+          wheel tags --platform-tag ${{ matrix.wheel_plat }} --remove dist/*.whl
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: python/dist/*.whl
+
+  # ─── Create GitHub Release ───────────────────────────────────────────────
+  github-release:
+    name: GitHub Release
+    needs: build-wheels
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download engine binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: engine-*
+          path: release-binaries/
+          merge-multiple: false
+
+      - name: Package engine binaries
+        run: |
+          mkdir -p release-assets
+          for dir in release-binaries/engine-*/; do
+            platform=$(basename "$dir")
+            binary=$(ls "$dir")
+            ext="${binary##*.}"
+            if [ "$ext" = "exe" ]; then
+              cp "$dir/$binary" "release-assets/securepdf-engine-${platform#engine-}.exe"
+            else
+              cp "$dir/$binary" "release-assets/securepdf-engine-${platform#engine-}"
+              chmod +x "release-assets/securepdf-engine-${platform#engine-}"
+            fi
+          done
+          ls -la release-assets/
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create ${{ github.ref_name }} \
+            --repo ${{ github.repository }} \
+            --title "SecurePDF ${{ github.ref_name }}" \
+            --notes-file RELEASE_NOTES_v0.0.1.md \
+            --latest \
+            release-assets/*
+
+  # ─── Publish to PyPI ─────────────────────────────────────────────────────
+  publish-pypi:
+    name: Publish to PyPI
+    needs: build-wheels
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write  # Required for OIDC trusted publishing
+
+    steps:
+      - name: Download all wheels
+        uses: actions/download-artifact@v4
+        with:
+          pattern: wheel-*
+          path: dist/
+          merge-multiple: true
+
+      - name: List wheels to publish
+        run: ls -la dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+
+  # ─── Build and push Docker image to ghcr.io ──────────────────────────────
+  publish-docker:
+    name: Publish Docker Image
+    needs: build-engine
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU (multi-arch support)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

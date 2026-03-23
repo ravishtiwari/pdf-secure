@@ -18,6 +18,8 @@ build/
 *.test
 *.out
 bin/
+!python/securepdf/bin/
+!python/securepdf/bin/.gitkeep
 do-not-commit/**
 engine/bin/**
 engine/securepdf-engine
