@@ -6,37 +6,32 @@ on:
       - 'v*.*.*'
 
 jobs:
-  # ─── Build Go engine for all target platforms ────────────────────────────
+  # ─── Build Go engine for all target platforms (cross-compiled on ubuntu) ──
   build-engine:
     name: Build Engine (${{ matrix.goos }}/${{ matrix.goarch }})
-    runs-on: ${{ matrix.runner }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: true
       matrix:
         include:
           - goos: linux
             goarch: amd64
-            runner: ubuntu-latest
             binary: securepdf-engine
             artifact: engine-linux-amd64
           - goos: linux
             goarch: arm64
-            runner: ubuntu-latest
             binary: securepdf-engine
             artifact: engine-linux-arm64
           - goos: darwin
             goarch: amd64
-            runner: macos-13
             binary: securepdf-engine
             artifact: engine-darwin-amd64
           - goos: darwin
             goarch: arm64
-            runner: macos-latest
             binary: securepdf-engine
             artifact: engine-darwin-arm64
           - goos: windows
             goarch: amd64
-            runner: windows-latest
             binary: securepdf-engine.exe
             artifact: engine-windows-amd64
 
@@ -64,42 +59,37 @@ jobs:
           name: ${{ matrix.artifact }}
           path: bin/${{ matrix.binary }}
 
-  # ─── Build platform-specific Python wheels ───────────────────────────────
+  # ─── Build platform-specific Python wheels (all on ubuntu) ───────────────
   build-wheels:
     name: Build Wheel (${{ matrix.goos }}/${{ matrix.goarch }})
     needs: build-engine
-    runs-on: ${{ matrix.runner }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: true
       matrix:
         include:
           - goos: linux
             goarch: amd64
-            runner: ubuntu-latest
             binary: securepdf-engine
             artifact: engine-linux-amd64
             wheel_plat: manylinux_2_17_x86_64
           - goos: linux
             goarch: arm64
-            runner: ubuntu-latest
             binary: securepdf-engine
             artifact: engine-linux-arm64
             wheel_plat: manylinux_2_17_aarch64
           - goos: darwin
             goarch: amd64
-            runner: macos-13
             binary: securepdf-engine
             artifact: engine-darwin-amd64
             wheel_plat: macosx_10_15_x86_64
           - goos: darwin
             goarch: arm64
-            runner: macos-latest
             binary: securepdf-engine
             artifact: engine-darwin-arm64
             wheel_plat: macosx_11_0_arm64
           - goos: windows
             goarch: amd64
-            runner: windows-latest
             binary: securepdf-engine.exe
             artifact: engine-windows-amd64
             wheel_plat: win_amd64
@@ -119,9 +109,8 @@ jobs:
           name: ${{ matrix.artifact }}
           path: python/securepdf/bin/
 
-      - name: Make binary executable (Unix)
-        if: matrix.goos != 'windows'
-        run: chmod +x python/securepdf/bin/${{ matrix.binary }}
+      - name: Make binary executable
+        run: chmod +x python/securepdf/bin/${{ matrix.binary }} || true
 
       - name: Install build tools
         run: pip install build wheel
@@ -132,8 +121,7 @@ jobs:
 
       - name: Retag wheel with platform tag
         working-directory: ./python
-        run: |
-          wheel tags --platform-tag ${{ matrix.wheel_plat }} --remove dist/*.whl
+        run: wheel tags --platform-tag ${{ matrix.wheel_plat }} --remove dist/*.whl
 
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
@@ -164,14 +152,14 @@ jobs:
         run: |
           mkdir -p release-assets
           for dir in release-binaries/engine-*/; do
-            platform=$(basename "$dir")
+            platform=$(basename "$dir" | sed 's/engine-//')
             binary=$(ls "$dir")
             ext="${binary##*.}"
             if [ "$ext" = "exe" ]; then
-              cp "$dir/$binary" "release-assets/securepdf-engine-${platform#engine-}.exe"
+              cp "$dir/$binary" "release-assets/securepdf-engine-${platform}.exe"
             else
-              cp "$dir/$binary" "release-assets/securepdf-engine-${platform#engine-}"
-              chmod +x "release-assets/securepdf-engine-${platform#engine-}"
+              cp "$dir/$binary" "release-assets/securepdf-engine-${platform}"
+              chmod +x "release-assets/securepdf-engine-${platform}"
             fi
           done
           ls -la release-assets/
