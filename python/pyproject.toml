@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "securepdf"
 version = "0.0.1"
 description = "Minimal Python SDK for SecurePDF"
-readme = "README.md"
+readme =  { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.10"
 dependencies = [
     "beartype>=0.17.0",

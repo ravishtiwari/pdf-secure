@@ -114,7 +114,8 @@ jobs:
 
       - name: Install build tools
         run: pip install build wheel
-
+      - name: Copy README for wheel metadata
+        run: cp README.md python/README.md
       - name: Build wheel
         working-directory: ./python
         run: python -m build --wheel --no-isolation
@@ -181,10 +182,16 @@ jobs:
     needs: build-wheels
     runs-on: ubuntu-latest
     environment: pypi
-    permissions:
-      id-token: write  # Required for OIDC trusted publishing
 
     steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install twine
+        run: pip install twine
+
       - name: Download all wheels
         uses: actions/download-artifact@v4
         with:
@@ -195,10 +202,14 @@ jobs:
       - name: List wheels to publish
         run: ls -la dist/
 
+      - name: Check distribution packages
+        run: twine check dist/*
+
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: dist/
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+        run: twine upload dist/*
 
   # ─── Build and push Docker image to ghcr.io ──────────────────────────────
   publish-docker:
