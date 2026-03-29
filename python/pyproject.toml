@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "securepdf"
+name = "pdf-secure"
 version = "0.0.1"
 description = "Minimal Python SDK for SecurePDF"
 readme =  { file = "README.md", content-type = "text/markdown" }
