@@ -97,6 +97,25 @@ cd ../python
 pip install -e .
 ```
 
+### Development Setup
+
+1. Install Go 1.24.0+ and ensure `make` is available. For API documentation, install godoc via `go install golang.org/x/tools/cmd/godoc@latest`.
+2. Create and activate a Python virtual environment:
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate        # macOS/Linux
+   # .venv\Scripts\activate         # Windows
+   pip install -r requirements-dev.txt
+   ```
+3. Build the Go engine:
+   ```bash
+   make engine-clean-build
+   ```
+4. Run all tests:
+   ```bash
+   make all-tests
+   ```
+
 ### 5-Minute Tutorial
 
 **1. Create a Policy (policy.json)**
@@ -245,29 +264,9 @@ securepdf/
 
 ## 🤝 Contributing
 
-We welcome contributions! Please:
-
-1. Check existing issues or create a new one
-2. Fork the repository
-3. Create a feature branch
-4. Add tests for new features
-5. Ensure `make all-tests` passes
-6. Submit a pull request
-
-**Development workflow:**
-```bash
-# Run pre-commit hooks
-pre-commit install
-
-# Run tests
-make all-tests
-
-# Format code
-make fmt
-
-# Lint code
-make lint
-```
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for
+development setup, testing, branch conventions, and the engine pipeline
+checklist.
 
 ---
 

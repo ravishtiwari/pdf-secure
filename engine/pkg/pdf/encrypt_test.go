@@ -216,7 +216,7 @@ func TestEncryptProducesActuallyEncryptedPDF(t *testing.T) {
 	conf := model.NewDefaultConfiguration()
 	conf.UserPW = ""
 	conf.OwnerPW = ""
-	_, err = api.ReadContextFile(outputPath)
+	_, _ = api.ReadContextFile(outputPath)
 	// pdfcpu may or may not error on read without password depending on version,
 	// but we can verify with ValidateFile which should fail without correct password
 	errValidate := api.ValidateFile(outputPath, conf)

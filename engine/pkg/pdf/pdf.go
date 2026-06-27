@@ -214,7 +214,9 @@ func (p *Processor) checkTimeout(ctx context.Context) error {
 }
 
 // checkMemory checks if the processing has exceeded the memory limit.
-// TODO: needs fix - runtime.MemStats.Alloc only covers Go heap; use OS-level setrlimit for a true hard limit
+// NOTE: checkMemory uses runtime.MemStats.Alloc (Go heap only); it is best-effort.
+// OS-level enforcement via setrlimit(RLIMIT_AS) is deferred to a future release.
+// See docs/engine-contract.md (max_memory_mb) for the documented caveat.
 func (p *Processor) checkMemory() error {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
