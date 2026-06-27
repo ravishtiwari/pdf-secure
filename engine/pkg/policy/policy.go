@@ -141,9 +141,7 @@ func LoadWithOptions(path string, opts *options.EngineOptions) (*Policy, *Valida
 	}
 
 	// Append unknown field warnings
-	for _, w := range unknownWarnings {
-		res.Warnings = append(res.Warnings, w)
-	}
+	res.Warnings = append(res.Warnings, unknownWarnings...)
 
 	return &policy, res, nil
 }
