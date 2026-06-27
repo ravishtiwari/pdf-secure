@@ -1,0 +1,17 @@
+# Development dependencies for scripts/ directory
+# Install with: pip install -r requirements-dev.txt
+
+# PDF reading and metadata extraction (test_provenance.py)
+pypdf>=4.0.0
+cryptography>=3.1  # Required by pypdf for AES-encrypted PDFs
+
+# CLI and terminal UI (test_encryption.py)
+typer>=0.9.0
+rich>=13.0.0
+
+# API documentation generation
+pdoc
+
+# Testing
+pytest
+pytest-cov
