@@ -101,9 +101,12 @@ def secure_pdf(
             for key, value in engine_opts.items():
                 cmd.extend(["--engine-opt", f"{key}={value}"])
 
+        # Derive subprocess timeout from engine_opts["timeout_ms"] (default 600s).
+        timeout_s = int((engine_opts or {}).get("timeout_ms", 600_000)) / 1000
         try:
-            # TODO: needs fix - derive timeout from engine_opts["timeout_ms"] if provided instead of hardcoding 600s
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=timeout_s
+            )
         except FileNotFoundError as e:
             raise SecurePDFEngineException(
                 f"Engine binary not found: {resolved_bin}\n"
@@ -112,7 +115,7 @@ def secure_pdf(
             ) from e
         except subprocess.TimeoutExpired:
             raise SecurePDFEngineException(
-                "Engine execution timed out after 600 seconds.\n"
+                f"Engine execution timed out after {timeout_s} seconds.\n"
                 "Consider using engine option timeout_ms to adjust processing timeout."
             )
         except OSError as e:
