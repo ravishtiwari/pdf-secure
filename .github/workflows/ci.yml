@@ -46,13 +46,23 @@ jobs:
         working-directory: ./engine
         run: go test -v -race ./cmd/...
 
+      - name: Check Go coverage threshold
+        working-directory: ./engine
+        run: |
+          COVERAGE=$(go tool cover -func=coverage.out | grep "^total" | awk '{print $3}' | tr -d '%')
+          THRESHOLD=70
+          echo "Go coverage: ${COVERAGE}%  (threshold: ${THRESHOLD}%)"
+          if (( $(echo "$COVERAGE < $THRESHOLD" | bc -l) )); then
+            echo "FAIL: coverage below threshold"
+            exit 1
+          fi
+
       - name: Upload Go coverage
         uses: codecov/codecov-action@v4
         with:
           files: ./engine/coverage.out
           flags: go
           name: go-coverage
-        continue-on-error: true
 
   go-lint:
     name: Go Lint
@@ -81,12 +91,11 @@ jobs:
         working-directory: ./engine
         run: go vet ./...
 
-      - name: Run staticcheck (optional)
+      - name: Run staticcheck
         working-directory: ./engine
         run: |
           go install honnef.co/go/tools/cmd/staticcheck@latest
           staticcheck ./...
-        continue-on-error: true
 
   python-tests:
     name: Python Tests
@@ -126,7 +135,16 @@ jobs:
       - name: Run Python unit tests
         working-directory: ./python
         run: |
-          pytest tests/test_sdk.py -v --cov=securepdf --cov-report=xml --cov-report=term
+          pytest tests/test_sdk.py -v --cov=securepdf --cov-report=xml --cov-report=term --cov-fail-under=70
+
+      - name: Verify engine binary exists
+        run: |
+          ENGINE_BIN="./bin/securepdf-engine"
+          if [ ! -f "$ENGINE_BIN" ]; then
+            echo "ERROR: Engine binary not found at $ENGINE_BIN. Run 'make engine-clean-build' first."
+            exit 1
+          fi
+          echo "Engine binary found: $ENGINE_BIN"
 
       - name: Run Python E2E tests
         working-directory: ./python
@@ -140,7 +158,6 @@ jobs:
           files: ./python/coverage.xml
           flags: python
           name: python-coverage-${{ matrix.python-version }}
-        continue-on-error: true
 
   python-lint:
     name: Python Lint
@@ -247,18 +264,17 @@ jobs:
           }
           EOF
 
-          # Create dummy PDF (simple text file treated as PDF for testing)
-          echo "%PDF-1.4" > test.pdf
-          echo "dummy content" >> test.pdf
+          # Use real minimal PDF fixture
+          cp engine/testdata/minimal.pdf test.pdf
 
           # Test Go engine
           ./bin/securepdf-engine secure \
             --in test.pdf \
             --out secured.pdf \
             --policy policy.json \
-            --receipt receipt.json || true
+            --receipt receipt.json
 
-          # Check receipt exists
+          # Check receipt exists and reports success
           if [ -f receipt.json ]; then
             echo "✅ Receipt generated"
             cat receipt.json | head -20
@@ -266,6 +282,19 @@ jobs:
             echo "❌ Receipt not generated"
             exit 1
           fi
+
+          python3 -c "
+          import json, sys
+          r = json.load(open('receipt.json'))
+          if not r.get('ok'):
+              print('FAIL: receipt ok =', r.get('ok'), 'error =', r.get('error'))
+              sys.exit(1)
+          print('PASS: receipt ok = true')
+          "
+
+          # Validate output PDF magic bytes
+          head -c 5 secured.pdf | grep -aq "%PDF-" || \
+            (echo "ERROR: output is not a valid PDF" && exit 1)
 
           # Test Python SDK
           python3 -c "

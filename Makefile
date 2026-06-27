@@ -3,7 +3,8 @@ SHELL := /bin/bash
 .PHONY: help fmt lint test engine-clean-build \
         go-unit-tests go-e2e-tests go-all-tests \
         py-unit-tests py-e2e-tests py-all-tests \
-        unit-tests e2e-tests all-tests
+        unit-tests e2e-tests all-tests \
+        godoc pydoc bench coverage
 
 help:
 	@echo "Targets:"
@@ -25,6 +26,14 @@ help:
 	@echo "  py-unit-tests    - run Python unit tests"
 	@echo "  py-e2e-tests     - run Python E2E tests"
 	@echo "  py-all-tests     - run all Python tests"
+	@echo ""
+	@echo "Documentation Targets:"
+	@echo "  godoc            - start local Go documentation server on :6060"
+	@echo "  pydoc            - generate Python API documentation"
+	@echo ""
+	@echo "Quality Targets:"
+	@echo "  bench            - run Go benchmarks"
+	@echo "  coverage         - print Go and Python coverage"
 
 fmt:
 	@cd engine && gofmt -l -w .
@@ -92,3 +101,26 @@ e2e-tests: go-e2e-tests py-e2e-tests
 
 all-tests: go-all-tests py-all-tests
 	@echo "==> All tests complete!"
+
+# =============================================================================
+# Documentation Targets
+# =============================================================================
+
+godoc: ## Start local Go documentation server on :6060
+	@cd engine && godoc -http=:6060
+
+pydoc: ## Generate Python API docs into docs/api/python/
+	@.venv/bin/pdoc python/securepdf/ --output-directory docs/api/python/
+
+# =============================================================================
+# Quality Targets
+# =============================================================================
+
+bench: ## Run Go benchmarks
+	@cd engine && go test ./... -bench=. -benchmem -run='^$$'
+
+coverage: ## Print coverage for Go and Python
+	@cd engine && go test ./... -coverprofile=/tmp/go-coverage.out > /dev/null && \
+	    go tool cover -func=/tmp/go-coverage.out | tail -1
+	@source .venv/bin/activate && cd python && \
+	    python -m pytest --cov=securepdf --cov-report=term -q tests/ -k "not e2e"
