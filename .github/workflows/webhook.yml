@@ -1,10 +1,14 @@
+# webhook.yml — DEFERRED
+# Webhook integration is planned for a future release.
+# This workflow is manual-only (workflow_dispatch) and does nothing.
 name: Webhook Relay (disabled)
 
-on: []
+on:
+  workflow_dispatch:
 
 jobs:
   noop:
     runs-on: ubuntu-latest
     steps:
-      - name: Workflow disabled
-        run: echo "Webhook workflow is currently disabled."
+      - name: No-op
+        run: echo "Webhook integration deferred — placeholder workflow."
