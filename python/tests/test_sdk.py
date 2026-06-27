@@ -332,6 +332,35 @@ class TestSecurePdfFunction:
                 },
             )
 
+    def test_secure_pdf_timeout_derived_from_engine_opts(self, monkeypatch, tmp_path):
+        """Test that subprocess timeout derives from engine_opts['timeout_ms']."""
+        import subprocess as sp
+
+        import securepdf.sdk as sdk_mod
+
+        captured = {}
+
+        def fake_run(cmd, **kwargs):
+            captured["timeout"] = kwargs.get("timeout")
+            raise sp.TimeoutExpired(cmd, kwargs.get("timeout"))
+
+        monkeypatch.setattr(sdk_mod.subprocess, "run", fake_run)
+        engine = tmp_path / "fake-engine"
+        engine.write_text("#!/bin/sh\n")
+        engine.chmod(0o755)
+
+        policy = Policy(encryption=EncryptionConfig(user_password="test"))
+        with pytest.raises(SecurePDFEngineException) as exc_info:
+            secure_pdf(
+                "dummy.pdf",
+                "out.pdf",
+                policy,
+                engine_bin=str(engine),
+                engine_opts={"timeout_ms": "5000"},
+            )
+        assert captured["timeout"] == 5.0
+        assert "5.0 seconds" in str(exc_info.value)
+
 
 class TestEncryptionConfig:
     """Tests for EncryptionConfig dataclass."""
@@ -434,3 +463,549 @@ class TestPolicyValidation:
         valid, errors = policy.validate()
         assert not valid
         assert any("version" in err.lower() for err in errors)
+
+
+# ---------------------------------------------------------------------------
+# Additional tests added to raise coverage to ≥70%
+# ---------------------------------------------------------------------------
+
+
+class TestFindEngineBin:
+    """Tests for _find_engine_bin helper."""
+
+    def test_find_engine_bin_falls_back_to_path_name(self):
+        """When no bundled binary exists, returns a Path with just the binary name."""
+        from securepdf.sdk import _find_engine_bin
+
+        result = _find_engine_bin()
+        # On non-Windows it should resolve to "securepdf-engine"
+        assert result.name == "securepdf-engine"
+
+    def test_find_engine_bin_returns_bundled_when_exists(self, tmp_path, monkeypatch):
+        """When bundled binary exists in package bin/, it is returned."""
+        import securepdf.sdk as sdk_mod
+
+        # Monkeypatch __file__ of sdk module to point at tmp_path
+        fake_pkg = tmp_path / "securepdf"
+        fake_bin = fake_pkg / "bin"
+        fake_bin.mkdir(parents=True)
+        bundled = fake_bin / "securepdf-engine"
+        bundled.write_text("#!/bin/sh\n")
+        bundled.chmod(0o755)
+
+        monkeypatch.setattr(sdk_mod, "__file__", str(fake_pkg / "sdk.py"))
+        result = sdk_mod._find_engine_bin()
+        assert result == bundled
+
+
+class TestSecurePdfSuccessPath:
+    """Tests for secure_pdf success and typed-failure paths via mocked subprocess."""
+
+    def _make_receipt_json(self, ok=True, error_code=None, error_msg=None):
+        data = {
+            "ok": ok,
+            "engine_version": "0.0.1",
+            "policy_version": "1.0",
+            "warnings": [],
+            "error": (
+                {"code": error_code, "message": error_msg or ""} if error_code else None
+            ),
+            "document_id": "doc-abc",
+            "copy_id": "copy-xyz",
+        }
+        return json.dumps(data)
+
+    def _make_fake_run(self, monkeypatch, tmp_path, returncode=0, receipt_json=None):
+        """Return a fake subprocess.run that writes a receipt file."""
+        import subprocess as sp
+
+        import securepdf.sdk as sdk_mod
+
+        def fake_run(cmd, **kwargs):
+            # Find receipt path from cmd args (--receipt <path>)
+            receipt_path = None
+            for i, arg in enumerate(cmd):
+                if str(arg) == "--receipt" and i + 1 < len(cmd):
+                    receipt_path = cmd[i + 1]
+                    break
+            if receipt_path and receipt_json is not None:
+                import pathlib
+
+                pathlib.Path(receipt_path).write_text(receipt_json, encoding="utf-8")
+            return sp.CompletedProcess(cmd, returncode=returncode, stdout="", stderr="")
+
+        monkeypatch.setattr(sdk_mod.subprocess, "run", fake_run)
+
+        engine = tmp_path / "fake-engine"
+        engine.write_text("#!/bin/sh\n")
+        engine.chmod(0o755)
+        return engine
+
+    def test_success_returns_receipt(self, monkeypatch, tmp_path):
+        """secure_pdf returns a Receipt when engine returns 0 and valid receipt."""
+        receipt_json = self._make_receipt_json(ok=True)
+        engine = self._make_fake_run(
+            monkeypatch, tmp_path, returncode=0, receipt_json=receipt_json
+        )
+        policy = Policy(encryption=EncryptionConfig(user_password="test"))
+        result = secure_pdf(
+            str(tmp_path / "in.pdf"),
+            str(tmp_path / "out.pdf"),
+            policy,
+            engine_bin=str(engine),
+        )
+        assert result.ok is True
+        assert result.document_id == "doc-abc"
+        assert result.copy_id == "copy-xyz"
+
+    def test_failure_e001_raises_policy_invalid(self, monkeypatch, tmp_path):
+        """secure_pdf raises SecurePDFPolicyInvalidError for E001."""
+        from securepdf.exception import SecurePDFPolicyInvalidError
+
+        receipt_json = self._make_receipt_json(
+            ok=False, error_code="E001", error_msg="Policy is invalid"
+        )
+        engine = self._make_fake_run(
+            monkeypatch, tmp_path, returncode=2, receipt_json=receipt_json
+        )
+        policy = Policy(encryption=EncryptionConfig(user_password="test"))
+        with pytest.raises(SecurePDFPolicyInvalidError):
+            secure_pdf(
+                str(tmp_path / "in.pdf"),
+                str(tmp_path / "out.pdf"),
+                policy,
+                engine_bin=str(engine),
+            )
+
+    def test_failure_e003_raises_input_unsupported(self, monkeypatch, tmp_path):
+        """secure_pdf raises SecurePDFInputUnsupportedError for E003."""
+        from securepdf.exception import SecurePDFInputUnsupportedError
+
+        receipt_json = self._make_receipt_json(
+            ok=False, error_code="E003", error_msg="Unsupported feature"
+        )
+        engine = self._make_fake_run(
+            monkeypatch, tmp_path, returncode=3, receipt_json=receipt_json
+        )
+        policy = Policy(encryption=EncryptionConfig(user_password="test"))
+        with pytest.raises(SecurePDFInputUnsupportedError):
+            secure_pdf(
+                str(tmp_path / "in.pdf"),
+                str(tmp_path / "out.pdf"),
+                policy,
+                engine_bin=str(engine),
+            )
+
+    def test_nonzero_returncode_no_receipt_raises_engine_exception(
+        self, monkeypatch, tmp_path
+    ):
+        """When returncode != 0 and no receipt file, raises SecurePDFEngineException."""
+        engine = self._make_fake_run(
+            monkeypatch, tmp_path, returncode=1, receipt_json=None
+        )
+        policy = Policy(encryption=EncryptionConfig(user_password="test"))
+        with pytest.raises(SecurePDFEngineException) as exc_info:
+            secure_pdf(
+                str(tmp_path / "in.pdf"),
+                str(tmp_path / "out.pdf"),
+                policy,
+                engine_bin=str(engine),
+            )
+        assert "Engine exited with code 1" in str(exc_info.value)
+
+    def test_zero_returncode_no_receipt_raises_engine_exception(
+        self, monkeypatch, tmp_path
+    ):
+        """When returncode == 0 but no receipt produced, raises SecurePDFEngineException."""
+        engine = self._make_fake_run(
+            monkeypatch, tmp_path, returncode=0, receipt_json=None
+        )
+        policy = Policy(encryption=EncryptionConfig(user_password="test"))
+        with pytest.raises(SecurePDFEngineException) as exc_info:
+            secure_pdf(
+                str(tmp_path / "in.pdf"),
+                str(tmp_path / "out.pdf"),
+                policy,
+                engine_bin=str(engine),
+            )
+        assert "failed to produce receipt" in str(exc_info.value).lower()
+
+    def test_oserror_raises_engine_exception(self, monkeypatch, tmp_path):
+        """OSError from subprocess.run is wrapped in SecurePDFEngineException."""
+        import securepdf.sdk as sdk_mod
+
+        def fake_run_oserr(cmd, **kwargs):
+            raise OSError("Permission denied")
+
+        monkeypatch.setattr(sdk_mod.subprocess, "run", fake_run_oserr)
+        engine = tmp_path / "fake-engine"
+        engine.write_text("#!/bin/sh\n")
+        engine.chmod(0o755)
+
+        policy = Policy(encryption=EncryptionConfig(user_password="test"))
+        with pytest.raises(SecurePDFEngineException) as exc_info:
+            secure_pdf(
+                str(tmp_path / "in.pdf"),
+                str(tmp_path / "out.pdf"),
+                policy,
+                engine_bin=str(engine),
+            )
+        assert "Failed to execute engine binary" in str(exc_info.value)
+
+    def test_receipt_with_ok_false_no_error_details(self, monkeypatch, tmp_path):
+        """receipt.ok=False with no error field raises generic SecurePDFException."""
+        from securepdf.exception import SecurePDFException
+
+        data = {
+            "ok": False,
+            "engine_version": "0.0.1",
+            "policy_version": "1.0",
+            "warnings": [],
+            "error": None,
+        }
+        receipt_json = json.dumps(data)
+        engine = self._make_fake_run(
+            monkeypatch, tmp_path, returncode=1, receipt_json=receipt_json
+        )
+        policy = Policy(encryption=EncryptionConfig(user_password="test"))
+        with pytest.raises(SecurePDFException):
+            secure_pdf(
+                str(tmp_path / "in.pdf"),
+                str(tmp_path / "out.pdf"),
+                policy,
+                engine_bin=str(engine),
+            )
+
+    def test_corrupt_receipt_json_falls_through_to_returncode_error(
+        self, monkeypatch, tmp_path
+    ):
+        """Corrupt receipt JSON causes fall-through to returncode error path."""
+        import securepdf.sdk as sdk_mod
+
+        def fake_run(cmd, **kwargs):
+            import pathlib
+            import subprocess as sp
+
+            for i, arg in enumerate(cmd):
+                if str(arg) == "--receipt" and i + 1 < len(cmd):
+                    pathlib.Path(cmd[i + 1]).write_text(
+                        "{{invalid json", encoding="utf-8"
+                    )
+                    break
+            return sp.CompletedProcess(
+                cmd, returncode=1, stdout="", stderr="engine error"
+            )
+
+        monkeypatch.setattr(sdk_mod.subprocess, "run", fake_run)
+        engine = tmp_path / "fake-engine"
+        engine.write_text("#!/bin/sh\n")
+        engine.chmod(0o755)
+
+        policy = Policy(encryption=EncryptionConfig(user_password="test"))
+        with pytest.raises(SecurePDFEngineException) as exc_info:
+            secure_pdf(
+                str(tmp_path / "in.pdf"),
+                str(tmp_path / "out.pdf"),
+                policy,
+                engine_bin=str(engine),
+            )
+        assert "Engine exited with code 1" in str(exc_info.value)
+
+
+class TestBatchSecurePdf:
+    """Tests for batch_secure_pdf function."""
+
+    def _patch_secure_pdf(self, monkeypatch, receipts_iter):
+        """Patch sdk.secure_pdf to return receipts from an iterator."""
+        import securepdf.sdk as sdk_mod
+
+        receipts = list(receipts_iter)
+        call_count = {"n": 0}
+
+        def fake_secure_pdf(*args, **kwargs):
+            idx = call_count["n"]
+            call_count["n"] += 1
+            r = receipts[idx]
+            if isinstance(r, Exception):
+                raise r
+            return r
+
+        monkeypatch.setattr(sdk_mod, "secure_pdf", fake_secure_pdf)
+
+    def _ok_receipt(self):
+        return Receipt(
+            ok=True,
+            engine_version="0.0.1",
+            policy_version="1.0",
+            warnings=[],
+        )
+
+    def test_batch_success_two_pdfs(self, monkeypatch):
+        """batch_secure_pdf returns two receipts on success."""
+        from securepdf.sdk import batch_secure_pdf
+
+        self._patch_secure_pdf(monkeypatch, [self._ok_receipt(), self._ok_receipt()])
+        policy = Policy(encryption=EncryptionConfig(user_password="test"))
+        results = batch_secure_pdf(
+            [("in1.pdf", "out1.pdf"), ("in2.pdf", "out2.pdf")],
+            policy,
+            max_workers=2,
+        )
+        assert len(results) == 2
+        assert all(r.ok for r in results)
+
+    def test_batch_failure_raises_secure_pdf_exception(self, monkeypatch):
+        """batch_secure_pdf re-raises as SecurePDFException when one PDF fails."""
+        from securepdf.exception import SecurePDFException
+        from securepdf.sdk import batch_secure_pdf
+
+        self._patch_secure_pdf(
+            monkeypatch,
+            [SecurePDFEngineException("engine failed"), self._ok_receipt()],
+        )
+        policy = Policy(encryption=EncryptionConfig(user_password="test"))
+        with pytest.raises(SecurePDFException) as exc_info:
+            batch_secure_pdf(
+                [("in1.pdf", "out1.pdf"), ("in2.pdf", "out2.pdf")],
+                policy,
+                max_workers=2,
+            )
+        assert "Failed to process" in str(exc_info.value)
+
+    def test_batch_with_engine_binary_path(self, monkeypatch, tmp_path):
+        """batch_secure_pdf passes engine_binary_path to process_one."""
+        import securepdf.sdk as sdk_mod
+        from securepdf.sdk import batch_secure_pdf
+
+        captured = {}
+
+        def fake_secure_pdf(
+            input_path, output_path, policy, engine_bin=None, engine_opts=None
+        ):
+            captured["engine_bin"] = engine_bin
+            return self._ok_receipt()
+
+        monkeypatch.setattr(sdk_mod, "secure_pdf", fake_secure_pdf)
+
+        engine = tmp_path / "my-engine"
+        policy = Policy(encryption=EncryptionConfig(user_password="test"))
+        batch_secure_pdf(
+            [("in.pdf", "out.pdf")],
+            policy,
+            engine_binary_path=str(engine),
+            max_workers=1,
+        )
+        assert captured["engine_bin"] == engine
+
+
+class TestExceptionFromReceipt:
+    """Tests for exception_from_receipt mapping."""
+
+    def _make_receipt(self, error_code, error_msg="some error"):
+        return Receipt(
+            ok=False,
+            engine_version="0.0.1",
+            policy_version="1.0",
+            warnings=[],
+            error=ReceiptError(code=error_code, message=error_msg),
+        )
+
+    def test_returns_none_for_ok_receipt(self):
+        from securepdf.exception import exception_from_receipt
+
+        r = Receipt(ok=True, engine_version="0.0.1", policy_version="1.0", warnings=[])
+        assert exception_from_receipt(r) is None
+
+    @pytest.mark.parametrize(
+        "code, exc_cls_name",
+        [
+            ("E001", "SecurePDFPolicyInvalidError"),
+            ("E002", "SecurePDFInputInvalidError"),
+            ("E003", "SecurePDFInputUnsupportedError"),
+            ("E004", "SecurePDFEncryptionError"),
+            ("E005", "SecurePDFLabelError"),
+            ("E006", "SecurePDFProvenanceError"),
+            ("E007", "SecurePDFTamperHashError"),
+            ("E008", "SecurePDFOutputError"),
+            ("E009", "SecurePDFTimeoutError"),
+            ("E010", "SecurePDFMemoryLimitError"),
+            ("E011", "SecurePDFInputReadError"),
+            ("E012", "SecurePDFWeakCryptoRejectedError"),
+            ("E099", "SecurePDFInternalError"),
+        ],
+    )
+    def test_maps_error_codes_to_exception_classes(self, code, exc_cls_name):
+        from securepdf.exception import exception_from_receipt
+
+        receipt = self._make_receipt(code)
+        exc = exception_from_receipt(receipt)
+        assert type(exc).__name__ == exc_cls_name
+        assert exc.receipt is receipt
+
+    def test_unknown_code_maps_to_base_exception(self):
+        from securepdf.exception import SecurePDFException, exception_from_receipt
+
+        receipt = self._make_receipt("E999")
+        exc = exception_from_receipt(receipt)
+        assert type(exc) is SecurePDFException
+
+
+class TestReceiptToDict:
+    """Tests for Receipt.to_dict method."""
+
+    def test_to_dict_success_minimal(self):
+        r = Receipt(ok=True, engine_version="1.0", policy_version="1.0", warnings=[])
+        d = r.to_dict()
+        assert d["ok"] is True
+        assert d["warnings"] == []
+        assert "error" not in d
+
+    def test_to_dict_with_error_and_details(self):
+        r = Receipt(
+            ok=False,
+            engine_version="1.0",
+            policy_version="1.0",
+            warnings=[],
+            error=ReceiptError(code="E001", message="bad", details={"field": "x"}),
+        )
+        d = r.to_dict()
+        assert d["error"]["code"] == "E001"
+        assert d["error"]["details"] == {"field": "x"}
+
+    def test_to_dict_with_optional_fields(self):
+        r = Receipt(
+            ok=True,
+            engine_version="1.0",
+            policy_version="1.0",
+            warnings=[],
+            document_id="did",
+            copy_id="cid",
+            input_sha256="sha:in",
+            output_sha256="sha:out",
+            input_content_hash="sha:content",
+            timestamp="2024-01-01T00:00:00Z",
+        )
+        d = r.to_dict()
+        assert d["document_id"] == "did"
+        assert d["copy_id"] == "cid"
+        assert d["input_sha256"] == "sha:in"
+        assert d["output_sha256"] == "sha:out"
+        assert d["input_content_hash"] == "sha:content"
+        assert d["timestamp"] == "2024-01-01T00:00:00Z"
+
+    def test_from_dict_legacy_warning_string(self):
+        """Legacy warnings as plain strings get code UNKNOWN."""
+        data = {
+            "ok": True,
+            "engine_version": "0.0.1",
+            "policy_version": "1.0",
+            "warnings": ["plain string warning"],
+            "error": None,
+        }
+        r = Receipt.from_dict(data)
+        assert r.warnings[0].code == "UNKNOWN"
+        assert r.warnings[0].message == "plain string warning"
+
+    def test_to_dict_error_without_details(self):
+        r = Receipt(
+            ok=False,
+            engine_version="1.0",
+            policy_version="1.0",
+            warnings=[],
+            error=ReceiptError(code="E004", message="enc failed"),
+        )
+        d = r.to_dict()
+        assert "details" not in d["error"]
+
+
+class TestPolicyFromDict:
+    """Tests for Policy.from_dict and sub-config from_dict methods."""
+
+    def test_policy_from_dict_full(self):
+        data = {
+            "policy_version": "1.0",
+            "encryption": {
+                "enabled": True,
+                "mode": "password",
+                "user_password": "abc",
+                "allow_print": True,
+                "allow_copy": False,
+                "allow_modify": False,
+                "crypto_profile": "compat",
+            },
+            "ack": {"required": True, "text": "OSS_DEFAULT"},
+            "labels": {
+                "mode": "visible",
+                "visible": {"text": "TOP SECRET", "placement": "header"},
+                "invisible": {"enabled": True, "namespace": "com.test"},
+            },
+            "provenance": {"enabled": True, "document_id": "auto", "copy_id": "auto"},
+            "tamper_detection": {"enabled": True},
+        }
+        policy = Policy.from_dict(data)
+        assert policy.policy_version == "1.0"
+        assert policy.encryption.user_password == "abc"
+        assert policy.ack.required is True
+        assert policy.labels.mode == "visible"
+        assert policy.labels.visible.text == "TOP SECRET"
+        assert policy.labels.invisible.namespace == "com.test"
+        assert policy.provenance.enabled is True
+        assert policy.tamper_detection.enabled is True
+
+    def test_policy_from_dict_minimal(self):
+        data = {"policy_version": "1.0"}
+        policy = Policy.from_dict(data)
+        assert policy.encryption.enabled is True  # default
+        assert policy.ack is None
+
+    def test_policy_validate_invalid_crypto_profile(self):
+        from securepdf.models.policy import EncryptionConfig as EC
+
+        policy = Policy(
+            policy_version="1.0",
+            encryption=EC(enabled=True, user_password="pw", crypto_profile="quantum"),
+        )
+        valid, errors = policy.validate()
+        assert not valid
+        assert any("crypto_profile" in e for e in errors)
+
+    def test_policy_validate_invalid_labels_mode(self):
+        from securepdf.models.policy import LabelsConfig, VisibleLabel
+
+        policy = Policy(
+            policy_version="1.0",
+            encryption=EncryptionConfig(enabled=False),
+            labels=LabelsConfig(mode="visible", visible=VisibleLabel(text="")),
+        )
+        valid, errors = policy.validate()
+        assert not valid
+        assert any("text" in e for e in errors)
+
+    def test_policy_validate_invisible_disabled(self):
+        from securepdf.models.policy import InvisibleLabel, LabelsConfig
+
+        policy = Policy(
+            policy_version="1.0",
+            encryption=EncryptionConfig(enabled=False),
+            labels=LabelsConfig(
+                mode="invisible",
+                invisible=InvisibleLabel(enabled=False),
+            ),
+        )
+        valid, errors = policy.validate()
+        assert not valid
+        assert any("invisible" in e for e in errors)
+
+    def test_policy_validate_tamper_detection_invalid_profile(self):
+        from securepdf.models.policy import TamperDetectionConfig
+
+        policy = Policy(
+            policy_version="1.0",
+            encryption=EncryptionConfig(enabled=False),
+            tamper_detection=TamperDetectionConfig(
+                enabled=True, hash_profile="bad_profile"
+            ),
+        )
+        valid, errors = policy.validate()
+        assert not valid
+        assert any("hash_profile" in e for e in errors)
