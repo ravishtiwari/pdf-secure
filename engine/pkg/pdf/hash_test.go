@@ -1,12 +1,16 @@
 package pdf
 
 import (
+	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/pdfcpu/pdfcpu/pkg/api"
 	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
+	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/types"
+	"securepdf-engine/pkg/policy"
 )
 
 func TestHashFile(t *testing.T) {
@@ -59,6 +63,85 @@ func TestHashPDFContent(t *testing.T) {
 
 	if hashA == hashB {
 		t.Error("expected content hash to change after modification")
+	}
+}
+
+func TestHashPDFContentStreamsChangesWithContent(t *testing.T) {
+	tmpDir := t.TempDir()
+	pdfPath := filepath.Join(tmpDir, "streams.pdf")
+	createDummyPDF(t, pdfPath)
+	normalizePDF(t, pdfPath)
+
+	hashA, err := HashPDFContentStreams(pdfPath)
+	if err != nil {
+		t.Fatalf("HashPDFContentStreams failed: %v", err)
+	}
+
+	if _, err := ApplyVisibleLabel(pdfPath, &policy.VisibleLabel{
+		Text:      "stream change",
+		Placement: "footer",
+		Pages:     "all",
+	}); err != nil {
+		t.Fatalf("ApplyVisibleLabel failed: %v", err)
+	}
+
+	hashB, err := HashPDFContentStreams(pdfPath)
+	if err != nil {
+		t.Fatalf("HashPDFContentStreams after mutation failed: %v", err)
+	}
+
+	if hashA == hashB {
+		t.Fatal("expected content stream hash to change after PDF content changes")
+	}
+}
+
+func TestHashObjectSerializesSupportedTypesDeterministically(t *testing.T) {
+	obj := types.Dict{
+		"Name":    types.Name("Example"),
+		"String":  types.StringLiteral("hello"),
+		"Hex":     types.HexLiteral("48656c6c6f"),
+		"Array":   types.Array{types.Integer(7), types.Float(3.5), types.Boolean(true)},
+		"Ref":     types.IndirectRef{ObjectNumber: types.Integer(10), GenerationNumber: types.Integer(0)},
+		"Stream":  types.StreamDict{Dict: types.Dict{"Subtype": types.Name("XML")}, Content: []byte("payload")},
+		"Default": nil,
+	}
+
+	var first bytes.Buffer
+	if err := hashObject(&first, obj); err != nil {
+		t.Fatalf("hashObject failed: %v", err)
+	}
+
+	var second bytes.Buffer
+	if err := hashObject(&second, obj); err != nil {
+		t.Fatalf("hashObject second pass failed: %v", err)
+	}
+
+	if first.String() != second.String() {
+		t.Fatalf("expected deterministic serialization, got %q vs %q", first.String(), second.String())
+	}
+}
+
+type failingWriter struct {
+	failAfter int
+	writes    int
+}
+
+func (fw *failingWriter) Write(p []byte) (int, error) {
+	if fw.writes >= fw.failAfter {
+		return 0, errors.New("forced write failure")
+	}
+	fw.writes++
+	return len(p), nil
+}
+
+func TestHashObjectPropagatesWriterError(t *testing.T) {
+	writer := &failingWriter{failAfter: 1}
+	err := hashObject(writer, types.Dict{
+		"One": types.StringLiteral("first"),
+		"Two": types.StringLiteral("second"),
+	})
+	if err == nil {
+		t.Fatal("expected hashObject to return writer error")
 	}
 }
 
@@ -148,11 +231,11 @@ endstream
 endobj
 xref
 0 5
-0000000000 65535 f 
-0000000009 00000 n 
-0000000060 00000 n 
-0000000117 00000 n 
-0000000223 00000 n 
+0000000000 65535 f
+0000000009 00000 n
+0000000060 00000 n
+0000000117 00000 n
+0000000223 00000 n
 trailer
 << /Size 5 /Root 1 0 R >>
 startxref

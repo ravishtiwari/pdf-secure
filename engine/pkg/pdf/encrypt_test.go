@@ -3,6 +3,7 @@ package pdf
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"securepdf-engine/pkg/policy"
@@ -11,6 +12,180 @@ import (
 	"github.com/pdfcpu/pdfcpu/pkg/api"
 	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
 )
+
+func TestGenerateRandomPassword(t *testing.T) {
+	password, err := generateRandomPassword(32)
+	if err != nil {
+		t.Fatalf("generateRandomPassword failed: %v", err)
+	}
+
+	if len(password) != 32 {
+		t.Fatalf("expected password length 32, got %d", len(password))
+	}
+
+	for _, ch := range password {
+		if !strings.ContainsRune(alphanumericChars, ch) {
+			t.Fatalf("password contains non-alphanumeric rune: %q", ch)
+		}
+	}
+}
+
+func TestWeakCryptoErrorMessage(t *testing.T) {
+	err := (&WeakCryptoError{Profile: CryptoProfileLegacy}).Error()
+	if !strings.Contains(err, CryptoProfileLegacy) {
+		t.Fatalf("expected weak crypto error to mention profile, got %q", err)
+	}
+}
+
+func TestBuildEncryptionConfigProfilesAndPermissions(t *testing.T) {
+	tests := []struct {
+		name        string
+		config      policy.EncryptionConfig
+		wantAES     bool
+		wantKeyBits int
+		wantWarning string
+		wantPerms   model.PermissionFlags
+	}{
+		{
+			name: "strong_defaults",
+			config: policy.EncryptionConfig{
+				Enabled:      true,
+				UserPassword: "user-pass",
+				AllowPrint:   true,
+				AllowCopy:    true,
+				AllowModify:  true,
+			},
+			wantAES:     true,
+			wantKeyBits: 256,
+			wantPerms: model.PermissionPrintRev2 | model.PermissionPrintRev3 |
+				model.PermissionExtract | model.PermissionExtractRev3 |
+				model.PermissionModify | model.PermissionModAnnFillForm | model.PermissionAssembleRev3,
+		},
+		{
+			name: "compat_profile",
+			config: policy.EncryptionConfig{
+				Enabled:       true,
+				UserPassword:  "user-pass",
+				OwnerPassword: "owner-pass",
+				CryptoProfile: CryptoProfileCompat,
+			},
+			wantAES:     true,
+			wantKeyBits: 128,
+			wantPerms:   model.PermissionsNone,
+		},
+		{
+			name: "legacy_profile_warns",
+			config: policy.EncryptionConfig{
+				Enabled:       true,
+				UserPassword:  "user-pass",
+				OwnerPassword: "owner-pass",
+				CryptoProfile: CryptoProfileLegacy,
+			},
+			wantAES:     false,
+			wantKeyBits: 128,
+			wantWarning: receipt.WarnWeakCryptoRequested,
+			wantPerms:   model.PermissionsNone,
+		},
+		{
+			name: "unknown_profile_falls_back_to_strong",
+			config: policy.EncryptionConfig{
+				Enabled:       true,
+				UserPassword:  "user-pass",
+				OwnerPassword: "owner-pass",
+				CryptoProfile: "unknown-profile",
+			},
+			wantAES:     true,
+			wantKeyBits: 256,
+			wantPerms:   model.PermissionsNone,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			conf, warnings, err := buildEncryptionConfig(tt.config)
+			if err != nil {
+				t.Fatalf("buildEncryptionConfig failed: %v", err)
+			}
+
+			if conf.UserPW != tt.config.UserPassword {
+				t.Fatalf("expected user password %q, got %q", tt.config.UserPassword, conf.UserPW)
+			}
+			if tt.config.OwnerPassword != "" && conf.OwnerPW != tt.config.OwnerPassword {
+				t.Fatalf("expected owner password %q, got %q", tt.config.OwnerPassword, conf.OwnerPW)
+			}
+			if tt.config.OwnerPassword == "" && len(conf.OwnerPW) != 8 {
+				t.Fatalf("expected generated owner password length 8, got %d", len(conf.OwnerPW))
+			}
+			if conf.EncryptUsingAES != tt.wantAES {
+				t.Fatalf("expected EncryptUsingAES=%v, got %v", tt.wantAES, conf.EncryptUsingAES)
+			}
+			if conf.EncryptKeyLength != tt.wantKeyBits {
+				t.Fatalf("expected EncryptKeyLength=%d, got %d", tt.wantKeyBits, conf.EncryptKeyLength)
+			}
+			if conf.Permissions&tt.wantPerms != tt.wantPerms {
+				t.Fatalf("expected permissions to include %v, got %v", tt.wantPerms, conf.Permissions)
+			}
+
+			foundWarning := tt.wantWarning == ""
+			for _, warning := range warnings {
+				if warning.Code == tt.wantWarning {
+					foundWarning = true
+				}
+			}
+			if !foundWarning {
+				t.Fatalf("expected warning %q, got %#v", tt.wantWarning, warnings)
+			}
+		})
+	}
+}
+
+func TestEncryptRejectWeakCrypto(t *testing.T) {
+	for _, profile := range []string{CryptoProfileCompat, CryptoProfileLegacy} {
+		t.Run(profile, func(t *testing.T) {
+			result, err := Encrypt("../../test-pdfs/sample-input.pdf", filepath.Join(t.TempDir(), "out.pdf"), policy.EncryptionConfig{
+				Enabled:       true,
+				UserPassword:  "password",
+				CryptoProfile: profile,
+			}, true)
+			if err == nil {
+				t.Fatal("expected Encrypt to reject weak crypto")
+			}
+
+			var weakErr *WeakCryptoError
+			if !strings.Contains(err.Error(), profile) {
+				t.Fatalf("expected error to mention profile %q, got %v", profile, err)
+			}
+			if _, ok := err.(*WeakCryptoError); !ok {
+				t.Fatalf("expected WeakCryptoError, got %T", err)
+			}
+			if result == nil || result.Error == nil {
+				t.Fatal("expected result error details to be populated")
+			}
+			if result.Error.Code != receipt.ErrWeakCryptoRejected {
+				t.Fatalf("expected error code %q, got %q", receipt.ErrWeakCryptoRejected, result.Error.Code)
+			}
+			_ = weakErr
+		})
+	}
+}
+
+func TestEncryptFailureReportsDefaultProfile(t *testing.T) {
+	outputPath := filepath.Join(t.TempDir(), "missing-output.pdf")
+
+	result, err := Encrypt("does-not-exist.pdf", outputPath, policy.EncryptionConfig{
+		Enabled:      true,
+		UserPassword: "password",
+	}, false)
+	if err == nil {
+		t.Fatal("expected Encrypt to fail for missing input")
+	}
+	if result == nil || result.Error == nil {
+		t.Fatal("expected result error details")
+	}
+	if got := result.Error.Details["crypto_profile"]; got != "strong (default)" {
+		t.Fatalf("expected default profile detail, got %q", got)
+	}
+}
 
 func TestEncryptWithAES256(t *testing.T) {
 	// Setup
