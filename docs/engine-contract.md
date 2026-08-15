@@ -128,13 +128,13 @@ Controls PDF encryption and permissions.
 | Profile | Algorithm | Security Level |
 |---------|-----------|----------------|
 | `strong` | AES-256 | Recommended (default) |
-| `compat` | AES-128 | Broader viewer support |
+| `compat` | AES-128 | Broader viewer support (emits W001) |
 | `legacy` | RC4-128 | Legacy systems only (emits W001) |
-| `auto` | AES-256 | Alias for `strong` |
 
 **Warnings:**
-- Using `legacy` profile emits warning W001 (WEAK_CRYPTO_REQUESTED)
-- The `reject_weak_crypto` engine option blocks legacy profiles and fails with E001 (POLICY_INVALID)
+- Using `compat` or `legacy` emits warning W001 (WEAK_CRYPTO_REQUESTED)
+- The `reject_weak_crypto` engine option blocks `compat` and `legacy` profiles and fails with E001 (POLICY_INVALID)
+- `auto` is not a valid V1 `crypto_profile`; use `strong` instead.
 
 ---
 
@@ -157,11 +157,11 @@ Custodianship acknowledgment configuration.
 |-------|------|----------|--------------|-------------|
 | `required` | boolean | No | `true`/`false` | Require acknowledgment |
 | `text` | string | No | `"OSS_DEFAULT"` | Acknowledgment text (v0.0.1: fixed value) |
-| `viewer_dependent` | boolean | No | `true`/`false` | Acknowledge viewer dependency (emits W003) |
+| `viewer_dependent` | boolean | No | `true`/`false` | Acknowledge viewer dependency (emits W003 when `required=true`) |
 
 **Notes:**
 - In v0.0.1, `text` accepts only `"OSS_DEFAULT"`
-- Setting `viewer_dependent=true` emits warning W003
+- Setting both `required=true` and `viewer_dependent=true` emits warning W003
 
 ---
 
@@ -431,6 +431,12 @@ Runtime options control engine behavior independently of the security policy.
 | `timeout_ms` | integer | `60000` | Processing timeout in milliseconds |
 | `max_input_mb` | integer | `200` | Maximum input file size in megabytes |
 | `max_memory_mb` | integer | `512` | Maximum memory usage in megabytes |
+
+> **Warning:** `max_memory_mb` enforcement is best-effort. The engine monitors
+> Go heap allocation (`runtime.MemStats.Alloc`) only; it does not impose an
+> OS-level memory limit. A process may exceed this value via memory-mapped
+> files or other non-heap usage. Do not rely on this option as a hard security
+> boundary. OS-level enforcement (`setrlimit`) is planned for a future release.
 
 **Example:**
 ```bash

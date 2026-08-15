@@ -150,9 +150,9 @@ The policy defines all security settings for PDF transformation.
 - `mode` (string): `"password"` (only supported mode in v0.0.1)
 - `user_password` (string, required if enabled): Password for opening PDF
 - `owner_password` (string, optional): Admin password for changing permissions
-- `crypto_profile` (string): `"strong"` (AES-256, default), `"compat"` (AES-128), `"auto"` (maps to strong); `"legacy"` (RC4-128) is deprecated — RC4 is a broken cipher, do not use for confidential documents
-- `allow_print` (bool): Allow printing (default: true)
-- `allow_copy` (bool): Allow text copying (default: true)
+- `crypto_profile` (string): `"strong"` (AES-256, default), `"compat"` (AES-128), or `"legacy"` (RC4-128). `compat` and `legacy` emit W001; `auto` is not accepted by the V1 engine.
+- `allow_print` (bool): Allow printing (default: false)
+- `allow_copy` (bool): Allow text copying (default: false)
 - `allow_modify` (bool): Allow modifications (default: false)
 
 ### Labels Configuration
@@ -245,7 +245,7 @@ The policy defines all security settings for PDF transformation.
 **Fields:**
 - `required` (bool): Require acknowledgment
 - `text` (string): `"OSS_DEFAULT"` (fixed in v0.0.1)
-- `viewer_dependent` (bool): Acknowledge viewer dependency (emits W003 if true)
+- `viewer_dependent` (bool): Acknowledge viewer dependency (emits W003 when `required` and `viewer_dependent` are both true)
 
 ---
 
@@ -325,14 +325,14 @@ else:
 - `input_path` (str | Path): Input PDF file path
 - `output_path` (str | Path): Output PDF file path
 - `policy` (Policy): Security policy
-- `engine_bin` (str | Path, optional): Path to engine binary (default: "securepdf-engine")
+- `engine_bin` (str | Path, optional): Path to engine binary (default: bundled binary when available; otherwise `securepdf-engine` on `PATH`)
 - `engine_opts` (dict[str, str], optional): Engine runtime options
 
 **Returns:** `Receipt` object
 
 **Raises:**
 - `SecurePDFEngineException`: Engine not found or failed
-- `SecurePDF*Error`: Specific error based on error code (E001-E012)
+- `SecurePDF*Error`: Specific error based on receipt error code (E001-E012 or E099)
 
 #### `batch_secure_pdf()`
 
@@ -798,9 +798,42 @@ E010: Memory limit exceeded
 
 ---
 
+## API Reference
+
+### Go Engine Documentation
+
+First, install godoc if not already available:
+```bash
+go install golang.org/x/tools/cmd/godoc@latest
+```
+
+Then start the local Go documentation server:
+```bash
+make godoc
+```
+
+Then open http://localhost:6060/pkg/securepdf-engine/pkg/pdf/ in your browser to view the API documentation for:
+- `securepdf-engine/pkg/pdf` — PDF processing pipeline
+- `securepdf-engine/pkg/policy` — Policy schema and validation
+- `securepdf-engine/pkg/receipt` — Receipt structure and codes
+- `securepdf-engine/cmd/securepdf-engine` — CLI entry point
+
+### Python SDK Documentation
+
+Generate Python API documentation:
+```bash
+make pydoc
+```
+
+Then open `docs/api/python/index.html` in your browser to view:
+- `securepdf.sdk` — Main API (`secure_pdf()`, `batch_secure_pdf()`)
+- `securepdf.models` — Policy dataclasses and configuration
+- `securepdf.exception` — Exception types and error handling
+
+---
+
 ## Next Steps
 
-- **API Reference**: See inline docstrings (Go godoc, Python docstrings)
 - **Architecture**: Read `docs/pdf-secure-architecture-final.md`
 - **Engine Contract**: Read `docs/engine-contract.md`
 - **CHANGELOG**: See `CHANGELOG.md` for complete feature list
