@@ -3,7 +3,7 @@
 A Python wrapper for the SecurePDF Go engine providing PDF security operations.
 """
 
-__version__ = "0.0.1"
+__version__ = "0.1.1"
 
 from .exception import (
     SecurePDFEncryptionError,
