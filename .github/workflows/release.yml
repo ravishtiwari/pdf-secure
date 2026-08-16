@@ -158,10 +158,76 @@ jobs:
           name: wheel-sdist
           path: python/dist/*.tar.gz
 
+  # ─── Confirm package artifacts match the release tag ────────────────────
+  validate-python-distributions:
+    name: Validate Python Distribution Version
+    needs: [build-wheels, build-sdist]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Download Python distributions
+        uses: actions/download-artifact@v4
+        with:
+          pattern: wheel-*
+          path: dist/
+          merge-multiple: true
+
+      - name: Verify distribution versions match tag
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          EXPECTED_VERSION="${RELEASE_TAG#v}"
+          export EXPECTED_VERSION
+          python - <<'PY'
+          import os
+          import tarfile
+          import zipfile
+          from pathlib import Path
+
+          expected = os.environ["EXPECTED_VERSION"]
+          distributions = sorted(Path("dist").glob("*"))
+          if not distributions:
+              raise SystemExit("ERROR: no Python distributions were downloaded")
+
+          for distribution in distributions:
+              if distribution.suffix == ".whl":
+                  with zipfile.ZipFile(distribution) as archive:
+                      metadata = next(
+                          name for name in archive.namelist()
+                          if name.endswith(".dist-info/METADATA")
+                      )
+                      contents = archive.read(metadata).decode("utf-8")
+              elif distribution.name.endswith(".tar.gz"):
+                  with tarfile.open(distribution) as archive:
+                      metadata = next(
+                          member for member in archive.getmembers()
+                          if member.name.endswith("/PKG-INFO")
+                      )
+                      contents = archive.extractfile(metadata).read().decode("utf-8")
+              else:
+                  raise SystemExit(f"ERROR: unsupported distribution: {distribution}")
+
+              version = next(
+                  line.removeprefix("Version: ") for line in contents.splitlines()
+                  if line.startswith("Version: ")
+              )
+              if version != expected:
+                  raise SystemExit(
+                      f"ERROR: {distribution.name} has version {version}; "
+                      f"expected {expected} from tag {os.environ['RELEASE_TAG']}"
+                  )
+              print(f"OK: {distribution.name} version {version}")
+          PY
+
   # ─── Create GitHub Release ───────────────────────────────────────────────
   github-release:
     name: GitHub Release
-    needs: build-wheels
+    needs: [build-wheels, validate-python-distributions]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -221,7 +287,7 @@ jobs:
   # ─── Publish to PyPI ─────────────────────────────────────────────────────
   publish-pypi:
     name: Publish to PyPI
-    needs: [build-wheels, build-sdist]
+    needs: [build-wheels, build-sdist, validate-python-distributions]
     runs-on: ubuntu-latest
     environment: pypi
 
